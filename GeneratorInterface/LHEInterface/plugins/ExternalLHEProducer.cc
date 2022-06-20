@@ -192,6 +192,30 @@ void ExternalLHEProducer::produce(edm::Event& iEvent, const edm::EventSetup& iSe
                 partonLevel_->weights().end(),
                 std::bind(&LHEEventProduct::addWeight, product.get(), std::placeholders::_1));
   product->setScales(partonLevel_->scales());
+  //set LO info
+  product->set_LO_income_pdg_1(partonLevel_->LO_income_pdg_1());
+  product->set_LO_income_pdg_2(partonLevel_->LO_income_pdg_2());
+  product->set_LO_qcd_power(partonLevel_->LO_qcd_power());
+  product->set_LO_ren_scale(partonLevel_->LO_ren_scale());
+  product->set_LO_pdf_x_1(partonLevel_->LO_pdf_x_1());
+  product->set_LO_pdf_x_2(partonLevel_->LO_pdf_x_2());
+  product->set_LO_pdf_q_1(partonLevel_->LO_pdf_q_1());
+  product->set_LO_pdf_q_2(partonLevel_->LO_pdf_q_2());
+  
+  //set NLO info
+  product->set_NLO_nWeights(partonLevel_->NLO_nWeights());
+  product->setNLO_pwgt_0(partonLevel_->NLO_pwgt_0());
+  product->setNLO_pwgt_1(partonLevel_->NLO_pwgt_1());
+  product->setNLO_pwgt_2(partonLevel_->NLO_pwgt_2());
+  product->setNLO_pdg_0(partonLevel_->NLO_pdg_0());
+  product->setNLO_pdg_1(partonLevel_->NLO_pdg_1());
+  product->setNLO_qcdpower(partonLevel_->NLO_qcdpower());
+  product->setNLO_bjks_0(partonLevel_->NLO_bjks_0());
+  product->setNLO_bjks_1(partonLevel_->NLO_bjks_1());
+  product->setNLO_scales2_0(partonLevel_->NLO_scales2_0());
+  product->setNLO_scales2_1(partonLevel_->NLO_scales2_1());
+  product->setNLO_scales2_2(partonLevel_->NLO_scales2_2());
+
   if (nPartonMapping_.empty()) {
     product->setNpLO(partonLevel_->npLO());
     product->setNpNLO(partonLevel_->npNLO());

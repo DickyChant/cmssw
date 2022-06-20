@@ -43,6 +43,54 @@ public:
   void setNpLO(int n) { npLO_ = n; }
   void setNpNLO(int n) { npNLO_ = n; }
 
+  int LO_income_pdg_1() const { return LO_income_pdg_1_; }
+  int LO_income_pdg_2() const { return LO_income_pdg_2_; }
+  int LO_qcd_power() const { return LO_qcd_power_; }
+
+  void set_LO_income_pdg_1(int pdgid) { LO_income_pdg_1_ = pdgid;}
+  void set_LO_income_pdg_2(int pdgid) {LO_income_pdg_2_ = pdgid;}
+  void set_LO_qcd_power(int pdgid) {LO_qcd_power_ = pdgid;}
+
+  // LO settings
+  float LO_ren_scale() const { return LO_ren_scale_; }
+  float LO_pdf_x_1() const { return LO_pdf_x_1_; }
+  float LO_pdf_x_2() const { return LO_pdf_x_2_; }
+  float LO_pdf_q_1() const { return LO_pdf_q_1_; }
+  float LO_pdf_q_2() const { return LO_pdf_q_2_; }
+
+  void set_LO_ren_scale(float q) {LO_ren_scale_ = q;}
+  void set_LO_pdf_x_1(float x) {LO_pdf_x_1_ = x;}
+  void set_LO_pdf_x_2(float x) {LO_pdf_x_2_ = x;}
+  void set_LO_pdf_q_1(float q) {LO_pdf_q_1_ = q;}
+  void set_LO_pdf_q_2(float q) {LO_pdf_q_2_ = q;}
+
+  // NLO settings
+  int NLO_nWeights() const { return NLO_nWeights_; }
+  void set_NLO_nWeights(int nWeights) { NLO_nWeights_ = nWeights; }
+
+  const std::vector<float> &NLO_pwgt_0() const { return NLO_pwgt_0_; }
+  void setNLO_pwgt_0(const std::vector<float> &NLO_pwgt_0) { NLO_pwgt_0_ = NLO_pwgt_0; }
+  const std::vector<float> &NLO_pwgt_1() const { return NLO_pwgt_1_; }
+  void setNLO_pwgt_1(const std::vector<float> &NLO_pwgt_1) { NLO_pwgt_1_ = NLO_pwgt_1; }
+  const std::vector<float> &NLO_pwgt_2() const { return NLO_pwgt_2_; }
+  void setNLO_pwgt_2(const std::vector<float> &NLO_pwgt_2) { NLO_pwgt_2_ = NLO_pwgt_2; }
+  const std::vector<int> &NLO_pdg_0() const { return NLO_pdg_0_; }
+  void setNLO_pdg_0(const std::vector<int> &NLO_pdg_0) { NLO_pdg_0_ = NLO_pdg_0; }
+  const std::vector<int> &NLO_pdg_1() const { return NLO_pdg_1_; }
+  void setNLO_pdg_1(const std::vector<int> &NLO_pdg_1) { NLO_pdg_1_ = NLO_pdg_1; }
+  const std::vector<int> &NLO_qcdpower() const { return NLO_qcdpower_; }
+  void setNLO_qcdpower(const std::vector<int> &NLO_qcdpower) { NLO_qcdpower_ = NLO_qcdpower; }
+  const std::vector<float> &NLO_bjks_0() const { return NLO_bjks_0_; }
+  void setNLO_bjks_0(const std::vector<float> &NLO_bjks_0) { NLO_bjks_0_ = NLO_bjks_0; }
+  const std::vector<float> &NLO_bjks_1() const { return NLO_bjks_1_; }
+  void setNLO_bjks_1(const std::vector<float> &NLO_bjks_1) { NLO_bjks_1_ = NLO_bjks_1; }
+  const std::vector<float> &NLO_scales2_0() const { return NLO_scales2_0_; }
+  void setNLO_scales2_0(const std::vector<float> &NLO_scales2_0) { NLO_scales2_0_ = NLO_scales2_0; }
+  const std::vector<float> &NLO_scales2_1() const { return NLO_scales2_1_; }
+  void setNLO_scales2_1(const std::vector<float> &NLO_scales2_1) { NLO_scales2_1_ = NLO_scales2_1; }
+  const std::vector<float> &NLO_scales2_2() const { return NLO_scales2_2_; }
+  void setNLO_scales2_2(const std::vector<float> &NLO_scales2_2) { NLO_scales2_2_ = NLO_scales2_2; }
+
   const lhef::HEPEUP &hepeup() const { return hepeup_; }
   const PDF *pdf() const { return pdf_.get(); }
 
@@ -108,6 +156,30 @@ private:
   std::vector<float> scales_;  //scale value used to exclude EWK-produced partons from matching
   int npLO_;                   //number of partons for LO process (used to steer matching/merging)
   int npNLO_;                  //number of partons for NLO process (used to steer matching/merging)
+
+  int LO_income_pdg_1_;
+  int LO_income_pdg_2_;
+  int LO_qcd_power_;
+
+
+  float LO_ren_scale_;
+  float LO_pdf_x_1_;
+  float LO_pdf_x_2_;
+  float LO_pdf_q_1_;
+  float LO_pdf_q_2_;
+
+    int NLO_nWeights_;
+    std::vector<float> NLO_pwgt_0_;
+    std::vector<float> NLO_pwgt_1_;
+    std::vector<float> NLO_pwgt_2_;
+    std::vector<int> NLO_pdg_0_;
+    std::vector<int> NLO_pdg_1_;
+    std::vector<int> NLO_qcdpower_;
+    std::vector<float> NLO_bjks_0_;
+    std::vector<float> NLO_bjks_1_;
+    std::vector<float> NLO_scales2_0_;
+    std::vector<float> NLO_scales2_1_;
+    std::vector<float> NLO_scales2_2_;
 };
 
 #endif  // GeneratorEvent_LHEInterface_LHEEventProduct_h

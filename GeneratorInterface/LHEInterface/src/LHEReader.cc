@@ -30,6 +30,21 @@
 
 XERCES_CPP_NAMESPACE_USE
 
+std::string replaceAll(const std::string& str, const std::string& from, const std::string& to) {
+    
+    std::string target = str;
+    
+    if(from.empty())
+        return str;
+    size_t start_pos = 0;
+    while((start_pos = target.find(from, start_pos)) != std::string::npos) {
+        target.replace(start_pos, from.length(), to);
+        start_pos += to.length(); // In case 'to' contains 'from', like replacing 'x' with 'yx'
+    }
+
+    return target;
+}
+
 namespace lhef {
 
   static void logFileAction(char const *msg, std::string const &fileName) {
@@ -94,7 +109,27 @@ namespace lhef {
           xmlEvent(nullptr),
           headerOk(false),
           npLO(-99),
-          npNLO(-99) {}
+          npNLO(-99),
+          LO_income_pdg_1(-99),
+          LO_income_pdg_2(-99),
+          LO_qcd_power_(-99),
+          LO_ren_scale_(-99),
+          LO_pdf_x_1_(-99),
+          LO_pdf_x_2_(-99),
+          LO_pdf_q_1_(-99),
+          LO_pdf_q_2_(-99),
+          NLO_pwgt_0_({-99}),
+          NLO_pwgt_1_({-99}),
+          NLO_pwgt_2_({-99}),
+          NLO_pdg_0_({-99}),
+          NLO_pdg_1_({-99}),
+          NLO_qcdpower_({-99}),
+          NLO_bjks_0_({-99}),
+          NLO_bjks_1_({-99}),
+          NLO_scales2_0_({-99}),
+          NLO_scales2_1_({-99}),
+          NLO_scales2_2_({-99}),
+          NLO_nWeights_(-99) {}
     ~XMLHandler() override {
       if (xmlHeader)
         xmlHeader->release();
@@ -141,6 +176,33 @@ namespace lhef {
     int npLO;
     int npNLO;
     std::vector<float> scales;
+
+    int LO_income_pdg_1;
+    int LO_income_pdg_2;
+    int LO_qcd_power_;
+
+
+    float LO_ren_scale_;
+    float LO_pdf_x_1_;
+    float LO_pdf_x_2_;
+    float LO_pdf_q_1_;
+    float LO_pdf_q_2_;
+
+    std::vector<float> NLO_pwgt_0_;
+    std::vector<float> NLO_pwgt_1_;
+    std::vector<float> NLO_pwgt_2_;
+    std::vector<int> NLO_pdg_0_;
+    std::vector<int> NLO_pdg_1_;
+    std::vector<int> NLO_qcdpower_;
+    std::vector<float> NLO_bjks_0_;
+    std::vector<float> NLO_bjks_1_;
+    std::vector<float> NLO_scales2_0_;
+    std::vector<float> NLO_scales2_1_;
+    std::vector<float> NLO_scales2_2_;
+    int NLO_nWeights_;
+
+    bool isNLO = false;
+    std::vector<DOMElement *> LO_reweight_info = {};
   };
 
   static void attributesToDom(DOMElement *dom, const Attributes &attributes) {
@@ -194,6 +256,7 @@ namespace lhef {
       DOMElement *elem = xmlEvent->createElement(qname);
       attributesToDom(elem, attributes);
 
+      // std::cout << "Name: " << name << " Type: " << elem->getNodeType() << std::endl;
       //TODO this is a hack (even more than the rest of this class)
       if (name == "rwgt") {
         xmlEventNodes[0]->appendChild(elem);
@@ -215,8 +278,14 @@ namespace lhef {
 
           scales.push_back(scaleval);
         }
+      } else if (name == "mgrwt") {
+        //  xmlEventNodes[0]->appendChild(elem);
+      } else if (name == "rscale" || name == "pdfrwt"){
+        LO_reweight_info.push_back(elem);
+      } else if (name == "mgrwgt") {
+        isNLO = true;
       }
-      xmlEventNodes.push_back(elem);
+      if (name != "mgrwgt") xmlEventNodes.push_back(elem);
       return;
     } else if (mode == kInit) {
       //skip unknown tags in init block as well
@@ -266,6 +335,7 @@ namespace lhef {
       mode = kEvent;
     }
 
+
     if (mode == kNone)
       throw cms::Exception("InvalidFormat") << "LHE file has invalid format" << std::endl;
 
@@ -276,6 +346,8 @@ namespace lhef {
                                          const XMLCh *const localname,
                                          const XMLCh *const qname) {
     std::string name((const char *)XMLSimpleStr(qname));
+
+    // std::cout << name << std::endl;
 
     if (mode) {
       if (mode == kHeader && xmlNodes.size() > 1) {
@@ -322,23 +394,42 @@ namespace lhef {
         xmlHeader = nullptr;
       } else if (name == "event" && mode == kEvent &&
                  (skipEvent || (!xmlEventNodes.empty()))) {  // handling of weights in LHE file
-
         if (skipEvent) {
           gotObject = mode;
           mode = kNone;
           return;
         }
+        if (!isNLO) {
+          auto node_rscale = LO_reweight_info[0];
+          XMLSimpleStr info_rscale(node_rscale->getFirstChild()->getNodeValue());
+          std::istringstream iss_rscale((std::string)info_rscale);
+          iss_rscale >> LO_qcd_power_ >> LO_ren_scale_;
 
+          float tmp;
+          auto node_pdf_beam1 = LO_reweight_info[1];
+          XMLSimpleStr info_pdf_beam1(node_pdf_beam1->getFirstChild()->getNodeValue());
+          std::istringstream iss_pdf_beam1((std::string)info_pdf_beam1);
+          iss_pdf_beam1 >> tmp >> LO_income_pdg_1 >> LO_pdf_x_1_ >> LO_pdf_q_1_;
+ 
+          auto node_pdf_beam2 = LO_reweight_info[2];
+          XMLSimpleStr info_pdf_beam2(node_pdf_beam2->getFirstChild()->getNodeValue());
+          std::istringstream iss_pdf_beam2((std::string)info_pdf_beam2);
+          iss_pdf_beam2 >> tmp >> LO_income_pdg_2 >> LO_pdf_x_2_ >> LO_pdf_q_2_;
+        }
+        int nTextNode = 0;
         for (DOMNode *node = xmlEventNodes[0]->getFirstChild(); node; node = node->getNextSibling()) {
           switch (node->getNodeType()) {
             case DOMNode::ELEMENT_NODE:  // rwgt
               for (DOMNode *rwgt = xmlEventNodes[1]->getFirstChild(); rwgt; rwgt = rwgt->getNextSibling()) {
+                // if (xmlEventNodes[1]->getNodeType() != DOMNode::ELEMENT_NODE) break;
                 DOMNode *attr = rwgt->getAttributes()->item(0);
                 XMLSimpleStr atname(attr->getNodeValue());
                 XMLSimpleStr weight(rwgt->getFirstChild()->getNodeValue());
                 switch (rwgt->getNodeType()) {
-                  case DOMNode::ELEMENT_NODE:
+                  case DOMNode::ELEMENT_NODE: {
                     weightsinevent.push_back(std::make_pair((const char *)atname, (const char *)weight));
+                  }
+                    
                     break;
                   default:
                     break;
@@ -348,7 +439,62 @@ namespace lhef {
             case DOMNode::TEXT_NODE:  // event information
             {
               XMLSimpleStr data(node->getNodeValue());
-              buffer.append(data);
+              if (nTextNode == 0) buffer.append(data);
+              else {
+                std::istringstream mgrwgt_info((std::string)data);
+                std::vector<std::string> lines;
+                std::string each_line;
+                while (getline(mgrwgt_info,each_line)){
+                  std::string tmp_str = each_line.c_str();
+                  lines.push_back(tmp_str);
+                }
+                int n_weights;
+                float tmp1, tmp2;
+                int nExternal;
+                std::istringstream iss_first_line(replaceAll(lines.at(0),"D","E"));
+                iss_first_line >> tmp1 >> n_weights;
+
+                float pwgt_0_;
+                float pwgt_1_;
+                float pwgt_2_;
+                int pdg_0_;
+                int pdg_1_;
+                int qcdpower_;
+                float bjks_0_;
+                float bjks_1_;
+                float scales2_0_;
+                float scales2_1_;
+                float scales2_2_;
+
+                NLO_nWeights_ = n_weights;
+
+                for(auto line = lines.rbegin(); ((line!=lines.rend()) && (n_weights > 0)); line++){
+                  std::istringstream iss_tmpline(replaceAll(*line,"D","E"));
+                  iss_tmpline >> pwgt_0_ >> pwgt_1_ >> pwgt_2_ >> tmp1 >> tmp1 >> nExternal;
+                  iss_tmpline >> pdg_0_ >> pdg_1_;
+                  for (int ii = 2; ii < nExternal; ii++){
+                    iss_tmpline >> tmp2;
+                  }
+                  iss_tmpline >> qcdpower_ >> bjks_0_ >> bjks_1_ >> scales2_0_ >> scales2_1_ >> scales2_2_;
+                  // std::cout << pwgt_0_ << '\t' << std::endl;
+                  // std::cout << scales2_2_ << '\t' << std::endl; 
+
+                  NLO_pwgt_0_.push_back(pwgt_0_);
+                  NLO_pwgt_1_.push_back(pwgt_1_);
+                  NLO_pwgt_2_.push_back(pwgt_2_);
+                  NLO_pdg_0_.push_back(pdg_0_);
+                  NLO_pdg_1_.push_back(pdg_1_);
+                  NLO_qcdpower_.push_back(qcdpower_);
+                  NLO_bjks_0_.push_back(bjks_0_);
+                  NLO_bjks_1_.push_back(bjks_1_);
+                  NLO_scales2_0_.push_back(scales2_0_);
+                  NLO_scales2_1_.push_back(scales2_1_);
+                  NLO_scales2_2_.push_back(scales2_2_);
+                  n_weights--;
+
+                }
+              }
+              nTextNode++;
             } break;
             default:
               break;
@@ -524,12 +670,45 @@ namespace lhef {
             sscanf(info[i].second.c_str(), "%le", &num);
             lheevent->addWeight(gen::WeightsInfo(info[i].first, num));
           }
+          // auto npLO = handler->npLO;
+          // auto npNLO = handler->npNLO;
+
+          // std::cout << npLO << "\t" << npNLO << std::endl;
           lheevent->setNpLO(handler->npLO);
           lheevent->setNpNLO(handler->npNLO);
           //fill scales
           if (!handler->scales.empty()) {
             lheevent->setScales(handler->scales);
           }
+
+
+          //set reweight info
+          lheevent->set_LO_income_pdg_1(handler->LO_income_pdg_1);
+          lheevent->set_LO_income_pdg_2(handler->LO_income_pdg_2);
+          lheevent->set_LO_qcd_power(handler->LO_qcd_power_);
+
+          //set LO info
+          lheevent->set_LO_ren_scale(handler->LO_ren_scale_);
+          lheevent->set_LO_pdf_x_1(handler->LO_pdf_x_1_);
+          lheevent->set_LO_pdf_x_2(handler->LO_pdf_x_2_);
+          lheevent->set_LO_pdf_q_1(handler->LO_pdf_q_1_);
+          lheevent->set_LO_pdf_q_2(handler->LO_pdf_q_2_);
+          //set NLO info
+          lheevent->set_NLO_nWeights(handler->NLO_nWeights_);
+          lheevent->setNLO_pwgt_0(handler->NLO_pwgt_0_);
+          lheevent->setNLO_pwgt_1(handler->NLO_pwgt_1_);
+          lheevent->setNLO_pwgt_2(handler->NLO_pwgt_2_);
+          lheevent->setNLO_pdg_0(handler->NLO_pdg_0_);
+          lheevent->setNLO_pdg_1(handler->NLO_pdg_1_);
+          lheevent->setNLO_qcdpower(handler->NLO_qcdpower_);
+          lheevent->setNLO_bjks_0(handler->NLO_bjks_0_);
+          lheevent->setNLO_bjks_1(handler->NLO_bjks_1_);
+          lheevent->setNLO_scales2_0(handler->NLO_scales2_0_);
+          lheevent->setNLO_scales2_1(handler->NLO_scales2_1_);
+          lheevent->setNLO_scales2_2(handler->NLO_scales2_2_);
+
+
+
           return lheevent;
         }
       }
