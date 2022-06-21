@@ -42,27 +42,29 @@ public:
 
   void setNpLO(int n) { npLO_ = n; }
   void setNpNLO(int n) { npNLO_ = n; }
-
-  int LO_income_pdg_1() const { return LO_income_pdg_1_; }
-  int LO_income_pdg_2() const { return LO_income_pdg_2_; }
-  int LO_qcd_power() const { return LO_qcd_power_; }
-
-  void set_LO_income_pdg_1(int pdgid) { LO_income_pdg_1_ = pdgid;}
-  void set_LO_income_pdg_2(int pdgid) {LO_income_pdg_2_ = pdgid;}
-  void set_LO_qcd_power(int pdgid) {LO_qcd_power_ = pdgid;}
-
+  
   // LO settings
-  float LO_ren_scale() const { return LO_ren_scale_; }
-  float LO_pdf_x_1() const { return LO_pdf_x_1_; }
-  float LO_pdf_x_2() const { return LO_pdf_x_2_; }
-  float LO_pdf_q_1() const { return LO_pdf_q_1_; }
-  float LO_pdf_q_2() const { return LO_pdf_q_2_; }
 
+  int LO_nWeights() const { return LO_nWeights_; }
+  int LO_qcd_power() const { return LO_qcd_power_; }
+  float LO_ren_scale() const { return LO_ren_scale_; }
+
+  void set_LO_nWeights(int nWeights) { LO_nWeights_ = nWeights; }
+  void set_LO_qcd_power(int pdgid) {LO_qcd_power_ = pdgid;}
   void set_LO_ren_scale(float q) {LO_ren_scale_ = q;}
-  void set_LO_pdf_x_1(float x) {LO_pdf_x_1_ = x;}
-  void set_LO_pdf_x_2(float x) {LO_pdf_x_2_ = x;}
-  void set_LO_pdf_q_1(float q) {LO_pdf_q_1_ = q;}
-  void set_LO_pdf_q_2(float q) {LO_pdf_q_2_ = q;}
+  
+  const std::vector<int> &LO_income_pdg_1() const { return LO_income_pdg_1_; }
+  void set_LO_income_pdg_1(const std::vector<int> &LO_income_pdg_1) { LO_income_pdg_1_ = LO_income_pdg_1; }
+  const std::vector<int> &LO_income_pdg_2() const { return LO_income_pdg_2_; }
+  void set_LO_income_pdg_2(const std::vector<int> &LO_income_pdg_2) { LO_income_pdg_2_ = LO_income_pdg_2; }
+  const std::vector<float> &LO_pdf_x_1() const { return LO_pdf_x_1_; }
+  void set_LO_pdf_x_1(const std::vector<float> &LO_pdf_x_1) { LO_pdf_x_1_ = LO_pdf_x_1; }
+  const std::vector<float> &LO_pdf_x_2() const { return LO_pdf_x_2_; }
+  void set_LO_pdf_x_2(const std::vector<float> &LO_pdf_x_2) { LO_pdf_x_2_ = LO_pdf_x_2; }
+  const std::vector<float> &LO_pdf_q_1() const { return LO_pdf_q_1_; }
+  void set_LO_pdf_q_1(const std::vector<float> &LO_pdf_q_1) { LO_pdf_q_1_ = LO_pdf_q_1; }
+  const std::vector<float> &LO_pdf_q_2() const { return LO_pdf_q_2_; }
+  void set_LO_pdf_q_2(const std::vector<float> &LO_pdf_q_2) { LO_pdf_q_2_ = LO_pdf_q_2; }
 
   // NLO settings
   int NLO_nWeights() const { return NLO_nWeights_; }
@@ -157,16 +159,16 @@ private:
   int npLO_;                   //number of partons for LO process (used to steer matching/merging)
   int npNLO_;                  //number of partons for NLO process (used to steer matching/merging)
 
-  int LO_income_pdg_1_;
-  int LO_income_pdg_2_;
+  int LO_nWeights_;
   int LO_qcd_power_;
-
-
   float LO_ren_scale_;
-  float LO_pdf_x_1_;
-  float LO_pdf_x_2_;
-  float LO_pdf_q_1_;
-  float LO_pdf_q_2_;
+
+  std::vector<int> LO_income_pdg_1_;
+  std::vector<int> LO_income_pdg_2_;
+  std::vector<float> LO_pdf_x_1_;
+  std::vector<float> LO_pdf_x_2_;
+  std::vector<float> LO_pdf_q_1_;
+  std::vector<float> LO_pdf_q_2_;
 
     int NLO_nWeights_;
     std::vector<float> NLO_pwgt_0_;

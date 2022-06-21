@@ -45,6 +45,28 @@ std::string replaceAll(const std::string& str, const std::string& from, const st
     return target;
 }
 
+int idxBiasFromMG5ProcCard(const std::string& MG5ProcCard){
+    std::istringstream iss(MG5ProcCard);
+    std::string line;
+    while (getline(iss,line)){
+            if(line.find("VERSION") != std::string::npos){
+              std::istringstream iss_line(line);
+              std::string tmp;
+              iss_line >> tmp >> tmp >> tmp; // Now tmp is "x.x.x"
+              int major, middle, minor;
+              sscanf(tmp.c_str(),"%d.%d.%d",&major,&middle,&minor);
+
+              if (major >= 3) {
+                if (middle >= 1){
+                  return 1; // from 3.1.0 there is a need for one more bit
+                }
+              }
+            return 0;
+            }
+                } 
+   return -1;
+}
+
 namespace lhef {
 
   static void logFileAction(char const *msg, std::string const &fileName) {
@@ -107,17 +129,19 @@ namespace lhef {
           mode(kNone),
           xmlHeader(nullptr),
           xmlEvent(nullptr),
+          xmlMG5ProcCard(nullptr),
           headerOk(false),
           npLO(-99),
           npNLO(-99),
-          LO_income_pdg_1(-99),
-          LO_income_pdg_2(-99),
+          LO_nWeights_(-99),
           LO_qcd_power_(-99),
           LO_ren_scale_(-99),
-          LO_pdf_x_1_(-99),
-          LO_pdf_x_2_(-99),
-          LO_pdf_q_1_(-99),
-          LO_pdf_q_2_(-99),
+          LO_income_pdg_1_({-99}),
+          LO_income_pdg_2_({-99}),
+          LO_pdf_x_1_({-99}),
+          LO_pdf_x_2_({-99}),
+          LO_pdf_q_1_({-99}),
+          LO_pdf_q_2_({-99}),
           NLO_pwgt_0_({-99}),
           NLO_pwgt_1_({-99}),
           NLO_pwgt_2_({-99}),
@@ -169,6 +193,8 @@ namespace lhef {
     Object mode;
     DOMDocument *xmlHeader;
     DOMDocument *xmlEvent;
+    DOMElement *xmlMG5ProcCard;
+    int MG5_idx_bias = -1;
     std::vector<DOMElement *> xmlNodes, xmlEventNodes;
     bool headerOk;
     std::vector<LHERunInfo::Header> headers;
@@ -177,16 +203,16 @@ namespace lhef {
     int npNLO;
     std::vector<float> scales;
 
-    int LO_income_pdg_1;
-    int LO_income_pdg_2;
-    int LO_qcd_power_;
+    int LO_nWeights_;
+  int LO_qcd_power_;
+  float LO_ren_scale_;
 
-
-    float LO_ren_scale_;
-    float LO_pdf_x_1_;
-    float LO_pdf_x_2_;
-    float LO_pdf_q_1_;
-    float LO_pdf_q_2_;
+  std::vector<int> LO_income_pdg_1_;
+  std::vector<int> LO_income_pdg_2_;
+  std::vector<float> LO_pdf_x_1_;
+  std::vector<float> LO_pdf_x_2_;
+  std::vector<float> LO_pdf_q_1_;
+  std::vector<float> LO_pdf_q_2_;
 
     std::vector<float> NLO_pwgt_0_;
     std::vector<float> NLO_pwgt_1_;
@@ -247,6 +273,9 @@ namespace lhef {
       attributesToDom(elem, attributes);
       xmlNodes.back()->appendChild(elem);
       xmlNodes.push_back(elem);
+      if (name == "MG5ProcCard"){
+        xmlMG5ProcCard = elem;
+      }
       return;
     } else if (mode == kEvent) {
       if (skipEvent) {
@@ -354,6 +383,12 @@ namespace lhef {
         xmlNodes.resize(xmlNodes.size() - 1);
         return;
       } else if (mode == kHeader) {
+        if ((xmlMG5ProcCard != nullptr) && (MG5_idx_bias < 0)){ // This can be change, as I have noticed that some LHE contains MG version information while some are not
+          std::unique_ptr<DOMLSSerializer> writertmp(impl->createLSSerializer());
+          XMLSimpleStr buffer(writertmp->writeToString(xmlMG5ProcCard));
+          MG5_idx_bias = idxBiasFromMG5ProcCard((std::string)buffer);
+          xmlMG5ProcCard = nullptr;
+        }
         std::unique_ptr<DOMLSSerializer> writer(impl->createLSSerializer());
         std::unique_ptr<DOMLSOutput> outputDesc(impl->createLSOutput());
         assert(outputDesc.get());
@@ -405,16 +440,35 @@ namespace lhef {
           std::istringstream iss_rscale((std::string)info_rscale);
           iss_rscale >> LO_qcd_power_ >> LO_ren_scale_;
 
-          float tmp;
+          int LO_pdg;
+          float LO_x,LO_q;
           auto node_pdf_beam1 = LO_reweight_info[1];
           XMLSimpleStr info_pdf_beam1(node_pdf_beam1->getFirstChild()->getNodeValue());
           std::istringstream iss_pdf_beam1((std::string)info_pdf_beam1);
-          iss_pdf_beam1 >> tmp >> LO_income_pdg_1 >> LO_pdf_x_1_ >> LO_pdf_q_1_;
+          iss_pdf_beam1 >> LO_nWeights_;
+          LO_income_pdg_1_.clear();
+          LO_pdf_x_1_.clear();
+          LO_pdf_q_1_.clear();
+          for (int ii = 0; ii < LO_nWeights_ ; ii++){
+            iss_pdf_beam1 >> LO_pdg >> LO_x >> LO_q;
+            LO_income_pdg_1_.push_back(LO_pdg);
+            LO_pdf_x_1_.push_back(LO_x);
+            LO_pdf_q_1_.push_back(LO_q);
+          }
  
           auto node_pdf_beam2 = LO_reweight_info[2];
           XMLSimpleStr info_pdf_beam2(node_pdf_beam2->getFirstChild()->getNodeValue());
           std::istringstream iss_pdf_beam2((std::string)info_pdf_beam2);
-          iss_pdf_beam2 >> tmp >> LO_income_pdg_2 >> LO_pdf_x_2_ >> LO_pdf_q_2_;
+          iss_pdf_beam2 >> LO_nWeights_;
+          LO_income_pdg_2_.clear();
+          LO_pdf_x_2_.clear();
+          LO_pdf_q_2_.clear();
+          for (int ii = 0; ii < LO_nWeights_ ; ii++){
+            iss_pdf_beam2 >> LO_pdg >> LO_x >> LO_q;
+            LO_income_pdg_2_.push_back(LO_pdg);
+            LO_pdf_x_2_.push_back(LO_x);
+            LO_pdf_q_2_.push_back(LO_q);
+          }
         }
         int nTextNode = 0;
         for (DOMNode *node = xmlEventNodes[0]->getFirstChild(); node; node = node->getNextSibling()) {
@@ -467,12 +521,23 @@ namespace lhef {
                 float scales2_2_;
 
                 NLO_nWeights_ = n_weights;
+                NLO_pwgt_0_.clear();
+                NLO_pwgt_1_.clear();
+                NLO_pwgt_2_.clear();
+                NLO_pdg_0_.clear();
+                NLO_pdg_1_.clear();
+                NLO_qcdpower_.clear();
+                NLO_scales2_0_.clear();
+                NLO_scales2_1_.clear();
+                NLO_scales2_2_.clear();
+                NLO_bjks_0_.clear();
+                NLO_bjks_1_.clear();
 
                 for(auto line = lines.rbegin(); ((line!=lines.rend()) && (n_weights > 0)); line++){
                   std::istringstream iss_tmpline(replaceAll(*line,"D","E"));
                   iss_tmpline >> pwgt_0_ >> pwgt_1_ >> pwgt_2_ >> tmp1 >> tmp1 >> nExternal;
                   iss_tmpline >> pdg_0_ >> pdg_1_;
-                  for (int ii = 2; ii < nExternal; ii++){
+                  for (int ii = 2; ii < (nExternal + MG5_idx_bias); ii++){
                     iss_tmpline >> tmp2;
                   }
                   iss_tmpline >> qcdpower_ >> bjks_0_ >> bjks_1_ >> scales2_0_ >> scales2_1_ >> scales2_2_;
@@ -681,13 +746,13 @@ namespace lhef {
             lheevent->setScales(handler->scales);
           }
 
-
-          //set reweight info
-          lheevent->set_LO_income_pdg_1(handler->LO_income_pdg_1);
-          lheevent->set_LO_income_pdg_2(handler->LO_income_pdg_2);
-          lheevent->set_LO_qcd_power(handler->LO_qcd_power_);
-
           //set LO info
+
+          lheevent->set_LO_income_pdg_1(handler->LO_income_pdg_1_);
+          lheevent->set_LO_income_pdg_2(handler->LO_income_pdg_2_);
+          lheevent->set_LO_qcd_power(handler->LO_qcd_power_);
+          lheevent->set_LO_nWeights(handler->LO_nWeights_);
+
           lheevent->set_LO_ren_scale(handler->LO_ren_scale_);
           lheevent->set_LO_pdf_x_1(handler->LO_pdf_x_1_);
           lheevent->set_LO_pdf_x_2(handler->LO_pdf_x_2_);

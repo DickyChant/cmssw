@@ -215,7 +215,7 @@
   <version ClassVersion="12" checksum="259352862"/>
   <version ClassVersion="13" checksum="3927731647"/>
   <version ClassVersion="14" checksum="905719452"/>
-  <version ClassVersion="15" checksum="1269820728"/>
+  <version ClassVersion="15" checksum="200762675"/>
  </class>
  <ioread sourceClass = "LHEEventProduct" version="[13]" targetClass="LHEEventProduct" source = "std::auto_ptr<gen::PdfInfo> pdf_;" target="pdf_">
    <![CDATA[pdf_.reset(onfile.pdf_.get()); onfile.pdf_.release();]]>
