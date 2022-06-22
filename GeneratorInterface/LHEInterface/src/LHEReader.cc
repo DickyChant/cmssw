@@ -51,8 +51,13 @@ int idxBiasFromMG5ProcCard(const std::string &MG5ProcCard) {
     if (line.find("VERSION") != std::string::npos) {
       std::istringstream iss_line(line);
       std::string tmp;
-      iss_line >> tmp >> tmp >> tmp;  // Now tmp is "x.x.x"
+      iss_line >> tmp >> tmp >> tmp;  // Now tmp is "x.x.x" or "5.x.x.x"
       int major, middle, minor;
+      if (tmp[0] == '5') {
+        std::cout << tmp << std::endl;
+        tmp = tmp.substr(2);
+        std::cout << tmp << std::endl;
+      }
       sscanf(tmp.c_str(), "%d.%d.%d", &major, &middle, &minor);
 
       if (major >= 3) {
@@ -226,7 +231,7 @@ namespace lhef {
     std::vector<float> NLO_scales2_2_;
     int NLO_nWeights_;
 
-    bool isNLO = false;
+    int isNLO = -1;
     std::vector<DOMElement *> LO_reweight_info = {};
   };
 
@@ -284,7 +289,6 @@ namespace lhef {
       DOMElement *elem = xmlEvent->createElement(qname);
       attributesToDom(elem, attributes);
 
-      // std::cout << "Name: " << name << " Type: " << elem->getNodeType() << std::endl;
       //TODO this is a hack (even more than the rest of this class)
       if (name == "rwgt") {
         xmlEventNodes[0]->appendChild(elem);
@@ -308,10 +312,12 @@ namespace lhef {
         }
       } else if (name == "mgrwt") {
         //  xmlEventNodes[0]->appendChild(elem);
+        isNLO = 1;
+        LO_reweight_info.clear();
       } else if (name == "rscale" || name == "pdfrwt") {
         LO_reweight_info.push_back(elem);
       } else if (name == "mgrwgt") {
-        isNLO = true;
+        isNLO = 0;
       }
       if (name != "mgrwgt")
         xmlEventNodes.push_back(elem);
@@ -375,8 +381,6 @@ namespace lhef {
                                          const XMLCh *const qname) {
     std::string name((const char *)XMLSimpleStr(qname));
 
-    // std::cout << name << std::endl;
-
     if (mode) {
       if (mode == kHeader && xmlNodes.size() > 1) {
         xmlNodes.resize(xmlNodes.size() - 1);
@@ -435,12 +439,12 @@ namespace lhef {
           mode = kNone;
           return;
         }
-        if (!isNLO) {
+        if (isNLO == 1) {
           auto node_rscale = LO_reweight_info[0];
           XMLSimpleStr info_rscale(node_rscale->getFirstChild()->getNodeValue());
           std::istringstream iss_rscale((std::string)info_rscale);
-          iss_rscale >> LO_qcd_power_ >> LO_ren_scale_;
 
+          iss_rscale >> LO_qcd_power_ >> LO_ren_scale_;
           int LO_pdg;
           float LO_x, LO_q;
           auto node_pdf_beam1 = LO_reweight_info[1];
@@ -496,12 +500,12 @@ namespace lhef {
               XMLSimpleStr data(node->getNodeValue());
               if (nTextNode == 0)
                 buffer.append(data);
-              else {
+              else if (isNLO == 0) {
                 std::istringstream mgrwgt_info((std::string)data);
                 std::vector<std::string> lines;
                 std::string each_line;
                 while (getline(mgrwgt_info, each_line)) {
-                  std::string tmp_str = each_line;
+                  const std::string &tmp_str = each_line;
                   lines.push_back(tmp_str);
                 }
                 int n_weights;
@@ -543,8 +547,6 @@ namespace lhef {
                     iss_tmpline >> tmp2;
                   }
                   iss_tmpline >> qcdpower_ >> bjks_0_ >> bjks_1_ >> scales2_0_ >> scales2_1_ >> scales2_2_;
-                  // std::cout << pwgt_0_ << '\t' << std::endl;
-                  // std::cout << scales2_2_ << '\t' << std::endl;
 
                   NLO_pwgt_0_.push_back(pwgt_0_);
                   NLO_pwgt_1_.push_back(pwgt_1_);
@@ -679,7 +681,6 @@ namespace lhef {
 
       XMLHandler::Object event = handler->gotObject;
       handler->gotObject = XMLHandler::kNone;
-
       switch (event) {
         case XMLHandler::kNone:
           if (!curDoc->parse()) {
@@ -727,7 +728,6 @@ namespace lhef {
           std::istringstream data;
           data.str(handler->buffer);
           handler->buffer.clear();
-
           std::shared_ptr<LHEEvent> lheevent;
           lheevent.reset(new LHEEvent(curRunInfo, data));
           const XMLHandler::wgt_info &info = handler->weightsinevent;
@@ -736,10 +736,6 @@ namespace lhef {
             sscanf(info[i].second.c_str(), "%le", &num);
             lheevent->addWeight(gen::WeightsInfo(info[i].first, num));
           }
-          // auto npLO = handler->npLO;
-          // auto npNLO = handler->npNLO;
-
-          // std::cout << npLO << "\t" << npNLO << std::endl;
           lheevent->setNpLO(handler->npLO);
           lheevent->setNpNLO(handler->npNLO);
           //fill scales

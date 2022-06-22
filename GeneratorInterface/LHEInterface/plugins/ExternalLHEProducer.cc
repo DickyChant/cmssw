@@ -194,10 +194,6 @@ void ExternalLHEProducer::produce(edm::Event& iEvent, const edm::EventSetup& iSe
   product->setScales(partonLevel_->scales());
   //set LO info
   product->set_LO_nWeights(partonLevel_->LO_nWeights());
-  auto test = partonLevel_->LO_income_pdg_1();
-  for (auto test1 : test) {
-    std::cout << test1 << std::endl;
-  }
   product->set_LO_income_pdg_1(partonLevel_->LO_income_pdg_1());
   product->set_LO_income_pdg_2(partonLevel_->LO_income_pdg_2());
   product->set_LO_qcd_power(partonLevel_->LO_qcd_power());
