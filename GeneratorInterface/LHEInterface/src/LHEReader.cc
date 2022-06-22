@@ -30,41 +30,40 @@
 
 XERCES_CPP_NAMESPACE_USE
 
-std::string replaceAll(const std::string& str, const std::string& from, const std::string& to) {
-    
-    std::string target = str;
-    
-    if(from.empty())
-        return str;
-    size_t start_pos = 0;
-    while((start_pos = target.find(from, start_pos)) != std::string::npos) {
-        target.replace(start_pos, from.length(), to);
-        start_pos += to.length(); // In case 'to' contains 'from', like replacing 'x' with 'yx'
-    }
+std::string replaceAll(const std::string &str, const std::string &from, const std::string &to) {
+  std::string target = str;
 
-    return target;
+  if (from.empty())
+    return str;
+  size_t start_pos = 0;
+  while ((start_pos = target.find(from, start_pos)) != std::string::npos) {
+    target.replace(start_pos, from.length(), to);
+    start_pos += to.length();  // In case 'to' contains 'from', like replacing 'x' with 'yx'
+  }
+
+  return target;
 }
 
-int idxBiasFromMG5ProcCard(const std::string& MG5ProcCard){
-    std::istringstream iss(MG5ProcCard);
-    std::string line;
-    while (getline(iss,line)){
-            if(line.find("VERSION") != std::string::npos){
-              std::istringstream iss_line(line);
-              std::string tmp;
-              iss_line >> tmp >> tmp >> tmp; // Now tmp is "x.x.x"
-              int major, middle, minor;
-              sscanf(tmp.c_str(),"%d.%d.%d",&major,&middle,&minor);
+int idxBiasFromMG5ProcCard(const std::string &MG5ProcCard) {
+  std::istringstream iss(MG5ProcCard);
+  std::string line;
+  while (getline(iss, line)) {
+    if (line.find("VERSION") != std::string::npos) {
+      std::istringstream iss_line(line);
+      std::string tmp;
+      iss_line >> tmp >> tmp >> tmp;  // Now tmp is "x.x.x"
+      int major, middle, minor;
+      sscanf(tmp.c_str(), "%d.%d.%d", &major, &middle, &minor);
 
-              if (major >= 3) {
-                if (middle >= 1){
-                  return 1; // from 3.1.0 there is a need for one more bit
-                }
-              }
-            return 0;
-            }
-                } 
-   return -1;
+      if (major >= 3) {
+        if (middle >= 1) {
+          return 1;  // from 3.1.0 there is a need for one more bit
+        }
+      }
+      return 0;
+    }
+  }
+  return -1;
 }
 
 namespace lhef {
@@ -204,15 +203,15 @@ namespace lhef {
     std::vector<float> scales;
 
     int LO_nWeights_;
-  int LO_qcd_power_;
-  float LO_ren_scale_;
+    int LO_qcd_power_;
+    float LO_ren_scale_;
 
-  std::vector<int> LO_income_pdg_1_;
-  std::vector<int> LO_income_pdg_2_;
-  std::vector<float> LO_pdf_x_1_;
-  std::vector<float> LO_pdf_x_2_;
-  std::vector<float> LO_pdf_q_1_;
-  std::vector<float> LO_pdf_q_2_;
+    std::vector<int> LO_income_pdg_1_;
+    std::vector<int> LO_income_pdg_2_;
+    std::vector<float> LO_pdf_x_1_;
+    std::vector<float> LO_pdf_x_2_;
+    std::vector<float> LO_pdf_q_1_;
+    std::vector<float> LO_pdf_q_2_;
 
     std::vector<float> NLO_pwgt_0_;
     std::vector<float> NLO_pwgt_1_;
@@ -273,7 +272,7 @@ namespace lhef {
       attributesToDom(elem, attributes);
       xmlNodes.back()->appendChild(elem);
       xmlNodes.push_back(elem);
-      if (name == "MG5ProcCard"){
+      if (name == "MG5ProcCard") {
         xmlMG5ProcCard = elem;
       }
       return;
@@ -309,12 +308,13 @@ namespace lhef {
         }
       } else if (name == "mgrwt") {
         //  xmlEventNodes[0]->appendChild(elem);
-      } else if (name == "rscale" || name == "pdfrwt"){
+      } else if (name == "rscale" || name == "pdfrwt") {
         LO_reweight_info.push_back(elem);
       } else if (name == "mgrwgt") {
         isNLO = true;
       }
-      if (name != "mgrwgt") xmlEventNodes.push_back(elem);
+      if (name != "mgrwgt")
+        xmlEventNodes.push_back(elem);
       return;
     } else if (mode == kInit) {
       //skip unknown tags in init block as well
@@ -364,7 +364,6 @@ namespace lhef {
       mode = kEvent;
     }
 
-
     if (mode == kNone)
       throw cms::Exception("InvalidFormat") << "LHE file has invalid format" << std::endl;
 
@@ -383,7 +382,9 @@ namespace lhef {
         xmlNodes.resize(xmlNodes.size() - 1);
         return;
       } else if (mode == kHeader) {
-        if ((xmlMG5ProcCard != nullptr) && (MG5_idx_bias < 0)){ // This can be change, as I have noticed that some LHE contains MG version information while some are not
+        if ((xmlMG5ProcCard != nullptr) &&
+            (MG5_idx_bias <
+             0)) {  // This can be change, as I have noticed that some LHE contains MG version information while some are not
           std::unique_ptr<DOMLSSerializer> writertmp(impl->createLSSerializer());
           XMLSimpleStr buffer(writertmp->writeToString(xmlMG5ProcCard));
           MG5_idx_bias = idxBiasFromMG5ProcCard((std::string)buffer);
@@ -441,7 +442,7 @@ namespace lhef {
           iss_rscale >> LO_qcd_power_ >> LO_ren_scale_;
 
           int LO_pdg;
-          float LO_x,LO_q;
+          float LO_x, LO_q;
           auto node_pdf_beam1 = LO_reweight_info[1];
           XMLSimpleStr info_pdf_beam1(node_pdf_beam1->getFirstChild()->getNodeValue());
           std::istringstream iss_pdf_beam1((std::string)info_pdf_beam1);
@@ -449,13 +450,13 @@ namespace lhef {
           LO_income_pdg_1_.clear();
           LO_pdf_x_1_.clear();
           LO_pdf_q_1_.clear();
-          for (int ii = 0; ii < LO_nWeights_ ; ii++){
+          for (int ii = 0; ii < LO_nWeights_; ii++) {
             iss_pdf_beam1 >> LO_pdg >> LO_x >> LO_q;
             LO_income_pdg_1_.push_back(LO_pdg);
             LO_pdf_x_1_.push_back(LO_x);
             LO_pdf_q_1_.push_back(LO_q);
           }
- 
+
           auto node_pdf_beam2 = LO_reweight_info[2];
           XMLSimpleStr info_pdf_beam2(node_pdf_beam2->getFirstChild()->getNodeValue());
           std::istringstream iss_pdf_beam2((std::string)info_pdf_beam2);
@@ -463,7 +464,7 @@ namespace lhef {
           LO_income_pdg_2_.clear();
           LO_pdf_x_2_.clear();
           LO_pdf_q_2_.clear();
-          for (int ii = 0; ii < LO_nWeights_ ; ii++){
+          for (int ii = 0; ii < LO_nWeights_; ii++) {
             iss_pdf_beam2 >> LO_pdg >> LO_x >> LO_q;
             LO_income_pdg_2_.push_back(LO_pdg);
             LO_pdf_x_2_.push_back(LO_x);
@@ -483,8 +484,8 @@ namespace lhef {
                   case DOMNode::ELEMENT_NODE: {
                     weightsinevent.push_back(std::make_pair((const char *)atname, (const char *)weight));
                   }
-                    
-                    break;
+
+                  break;
                   default:
                     break;
                 }
@@ -493,19 +494,20 @@ namespace lhef {
             case DOMNode::TEXT_NODE:  // event information
             {
               XMLSimpleStr data(node->getNodeValue());
-              if (nTextNode == 0) buffer.append(data);
+              if (nTextNode == 0)
+                buffer.append(data);
               else {
                 std::istringstream mgrwgt_info((std::string)data);
                 std::vector<std::string> lines;
                 std::string each_line;
-                while (getline(mgrwgt_info,each_line)){
-                  std::string tmp_str = each_line.c_str();
+                while (getline(mgrwgt_info, each_line)) {
+                  std::string tmp_str = each_line;
                   lines.push_back(tmp_str);
                 }
                 int n_weights;
                 float tmp1, tmp2;
                 int nExternal;
-                std::istringstream iss_first_line(replaceAll(lines.at(0),"D","E"));
+                std::istringstream iss_first_line(replaceAll(lines.at(0), "D", "E"));
                 iss_first_line >> tmp1 >> n_weights;
 
                 float pwgt_0_;
@@ -533,16 +535,16 @@ namespace lhef {
                 NLO_bjks_0_.clear();
                 NLO_bjks_1_.clear();
 
-                for(auto line = lines.rbegin(); ((line!=lines.rend()) && (n_weights > 0)); line++){
-                  std::istringstream iss_tmpline(replaceAll(*line,"D","E"));
+                for (auto line = lines.rbegin(); ((line != lines.rend()) && (n_weights > 0)); line++) {
+                  std::istringstream iss_tmpline(replaceAll(*line, "D", "E"));
                   iss_tmpline >> pwgt_0_ >> pwgt_1_ >> pwgt_2_ >> tmp1 >> tmp1 >> nExternal;
                   iss_tmpline >> pdg_0_ >> pdg_1_;
-                  for (int ii = 2; ii < (nExternal + MG5_idx_bias); ii++){
+                  for (int ii = 2; ii < (nExternal + MG5_idx_bias); ii++) {
                     iss_tmpline >> tmp2;
                   }
                   iss_tmpline >> qcdpower_ >> bjks_0_ >> bjks_1_ >> scales2_0_ >> scales2_1_ >> scales2_2_;
                   // std::cout << pwgt_0_ << '\t' << std::endl;
-                  // std::cout << scales2_2_ << '\t' << std::endl; 
+                  // std::cout << scales2_2_ << '\t' << std::endl;
 
                   NLO_pwgt_0_.push_back(pwgt_0_);
                   NLO_pwgt_1_.push_back(pwgt_1_);
@@ -556,7 +558,6 @@ namespace lhef {
                   NLO_scales2_1_.push_back(scales2_1_);
                   NLO_scales2_2_.push_back(scales2_2_);
                   n_weights--;
-
                 }
               }
               nTextNode++;
@@ -771,8 +772,6 @@ namespace lhef {
           lheevent->setNLO_scales2_0(handler->NLO_scales2_0_);
           lheevent->setNLO_scales2_1(handler->NLO_scales2_1_);
           lheevent->setNLO_scales2_2(handler->NLO_scales2_2_);
-
-
 
           return lheevent;
         }

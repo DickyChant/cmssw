@@ -195,7 +195,7 @@ void ExternalLHEProducer::produce(edm::Event& iEvent, const edm::EventSetup& iSe
   //set LO info
   product->set_LO_nWeights(partonLevel_->LO_nWeights());
   auto test = partonLevel_->LO_income_pdg_1();
-  for (auto test1:test){
+  for (auto test1 : test) {
     std::cout << test1 << std::endl;
   }
   product->set_LO_income_pdg_1(partonLevel_->LO_income_pdg_1());
@@ -206,7 +206,7 @@ void ExternalLHEProducer::produce(edm::Event& iEvent, const edm::EventSetup& iSe
   product->set_LO_pdf_x_2(partonLevel_->LO_pdf_x_2());
   product->set_LO_pdf_q_1(partonLevel_->LO_pdf_q_1());
   product->set_LO_pdf_q_2(partonLevel_->LO_pdf_q_2());
-  
+
   //set NLO info
   product->set_NLO_nWeights(partonLevel_->NLO_nWeights());
   product->setNLO_pwgt_0(partonLevel_->NLO_pwgt_0());

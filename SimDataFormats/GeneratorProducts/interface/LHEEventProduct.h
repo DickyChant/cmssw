@@ -42,7 +42,7 @@ public:
 
   void setNpLO(int n) { npLO_ = n; }
   void setNpNLO(int n) { npNLO_ = n; }
-  
+
   // LO settings
 
   int LO_nWeights() const { return LO_nWeights_; }
@@ -50,9 +50,9 @@ public:
   float LO_ren_scale() const { return LO_ren_scale_; }
 
   void set_LO_nWeights(int nWeights) { LO_nWeights_ = nWeights; }
-  void set_LO_qcd_power(int pdgid) {LO_qcd_power_ = pdgid;}
-  void set_LO_ren_scale(float q) {LO_ren_scale_ = q;}
-  
+  void set_LO_qcd_power(int pdgid) { LO_qcd_power_ = pdgid; }
+  void set_LO_ren_scale(float q) { LO_ren_scale_ = q; }
+
   const std::vector<int> &LO_income_pdg_1() const { return LO_income_pdg_1_; }
   void set_LO_income_pdg_1(const std::vector<int> &LO_income_pdg_1) { LO_income_pdg_1_ = LO_income_pdg_1; }
   const std::vector<int> &LO_income_pdg_2() const { return LO_income_pdg_2_; }
@@ -170,18 +170,18 @@ private:
   std::vector<float> LO_pdf_q_1_;
   std::vector<float> LO_pdf_q_2_;
 
-    int NLO_nWeights_;
-    std::vector<float> NLO_pwgt_0_;
-    std::vector<float> NLO_pwgt_1_;
-    std::vector<float> NLO_pwgt_2_;
-    std::vector<int> NLO_pdg_0_;
-    std::vector<int> NLO_pdg_1_;
-    std::vector<int> NLO_qcdpower_;
-    std::vector<float> NLO_bjks_0_;
-    std::vector<float> NLO_bjks_1_;
-    std::vector<float> NLO_scales2_0_;
-    std::vector<float> NLO_scales2_1_;
-    std::vector<float> NLO_scales2_2_;
+  int NLO_nWeights_;
+  std::vector<float> NLO_pwgt_0_;
+  std::vector<float> NLO_pwgt_1_;
+  std::vector<float> NLO_pwgt_2_;
+  std::vector<int> NLO_pdg_0_;
+  std::vector<int> NLO_pdg_1_;
+  std::vector<int> NLO_qcdpower_;
+  std::vector<float> NLO_bjks_0_;
+  std::vector<float> NLO_bjks_1_;
+  std::vector<float> NLO_scales2_0_;
+  std::vector<float> NLO_scales2_1_;
+  std::vector<float> NLO_scales2_2_;
 };
 
 #endif  // GeneratorEvent_LHEInterface_LHEEventProduct_h
