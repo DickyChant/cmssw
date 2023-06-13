@@ -61,19 +61,19 @@ void RivetAnalyzer::beginJob() {
   char* cmsswbase = std::getenv("CMSSW_BASE");
   char* cmsswrelease = std::getenv("CMSSW_RELEASE_BASE");
   if (!std::getenv("RIVET_REF_PATH")) {
-    const std::string rivetref = "RIVET_REF_PATH=" + string(cmsswbase) +
+    const std::string rivetref = string(cmsswbase) +
                                  "/src/GeneratorInterface/RivetInterface/data:" + string(cmsswrelease) +
-                                 "/src/GeneratorInterface/RivetInterface/data";
+                                 "/src/GeneratorInterface/RivetInterface/data:.";
     char* rivetrefCstr = strdup(rivetref.c_str());
-    putenv(rivetrefCstr);
+    setenv("RIVET_REF_PATH", rivetrefCstr, 1);
     free(rivetrefCstr);
   }
   if (!std::getenv("RIVET_INFO_PATH")) {
-    const std::string rivetinfo = "RIVET_INFO_PATH=" + string(cmsswbase) +
+    const std::string rivetinfo = string(cmsswbase) +
                                   "/src/GeneratorInterface/RivetInterface/data:" + string(cmsswrelease) +
-                                  "/src/GeneratorInterface/RivetInterface/data";
+                                  "/src/GeneratorInterface/RivetInterface/data:.";
     char* rivetinfoCstr = strdup(rivetinfo.c_str());
-    putenv(rivetinfoCstr);
+    setenv("RIVET_INFO_PATH", rivetinfoCstr, 1);
     free(rivetinfoCstr);
   }
 }
@@ -119,6 +119,14 @@ void RivetAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
   //finalize weight names on the first event
   if (_isFirstEvent) {
     if (_useLHEweights) {
+      // Some samples have weights but no weight names -> assign generic names lheN
+      if (_lheWeightNames.size() == 0) {
+        edm::Handle<LHEEventProduct> lheEventHandle;
+        iEvent.getByToken(_LHECollection, lheEventHandle);
+        for (unsigned int i = 0; i < lheEventHandle->weights().size(); i++) {
+          _lheWeightNames.push_back("lhe"+std::to_string(i+1)); // start with 1 to match LHE weight IDs
+        }
+      }
       _weightNames.insert(_weightNames.end(), _lheWeightNames.begin(), _lheWeightNames.end());
     }
     // clean weight names to be accepted by Rivet plotting
