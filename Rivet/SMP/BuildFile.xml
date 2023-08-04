@@ -1,0 +1,14 @@
+<use name="rivet"/>
+<use name="yoda"/>
+<use name="fastjet"/>
+<use name="fastjet-contrib"/>
+<use name="clhep"/>
+<use name="boost"/>
+<use name="gsl"/>
+<use name="root"/>
+<use name="GeneratorInterface/Core"/>
+<use name="GeneratorInterface/Pythia6Interface"/>
+<flags   RIVET_PLUGIN="1"/>
+<export>
+  <lib name="1"/>
+</export>

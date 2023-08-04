@@ -1,0 +1,46 @@
+Name: CMS_2018_I1634835
+Year: 2018
+Summary: Measurement of associated Z + charm production in proton-proton collisions at sqrts = 8 TeV
+Experiment: CMS
+Collider: LHC
+InspireID: 1634835
+Status: UNVALIDATED
+Authors: 
+- Hannes Jung <hannes.jung@desy.de>
+- Juan Pablo Fernandez <juanpablo.fernandez@ciemat.es>
+References: 
+- Eur.Phys.J.C 78 (2018) 287 
+- doi:10.1140/epjc/s10052-018-5752-x, 
+- arXiv:1711.02143
+- CMS-SMP-15-009
+#RunInfo: <Describe event types, cuts, and other general generator config tips.>
+Beams: [p+, p+]
+Energies: [[4000,4000]]
+#Luminosity_fb: 139.0
+Description: A study of the associated production of a Z boson and a charm quark jet (Z+c) and a comparison to production with a b quark jet (Z+b), in pp collisions at a centre-of-mass energy of 8 TeV are presented. The analysis uses a data sample cor- responding to an integrated luminosity of 19.7 fb$^{-1}$, collected with the CMS detector at the CERN LHC. The Z boson candidates are identified through their decays into pairs of electrons or muons. Jets originating from heavy flavour quarks are iden- tified using semileptonic decays of c or b flavoured hadrons and hadronic decays of charm hadrons. The measurements are performed in the kinematic region with two leptons with $p_T^l > 20$ GeV, $|\eta^l| < 2.1$, $71 < m_{ll} < 111$ GeV, and heavy flavour jets with $p_T^{jet} > 25$ GeV and $|\eta^{jet}| <2.5$. The Z + c production cross section and the cross section ratio are also measured as a function of the transverse momentum of the Z boson and of the heavy flavour jet. 
+ValidationInfo:
+  'A description of the process used to validate the Rivet code against
+  the original experimental analysis. Cut-flow tables and similar information
+  are welcome'
+#ReleaseTests:
+# - $A my-hepmc-prefix :MODE=some_rivet_flag
+Keywords: []
+BibKey: CMS:2017snu
+BibTeX: '@article{CMS:2017snu,
+    author = "Sirunyan, A. M. and others",
+    collaboration = "CMS",
+    title = "{Measurement of associated Z + charm production in proton-proton collisions at $\sqrt{s} = $ 8 TeV}",
+    eprint = "1711.02143",
+    archivePrefix = "arXiv",
+    primaryClass = "hep-ex",
+    reportNumber = "CMS-SMP-15-009, CERN-EP-2017-257",
+    doi = "10.1140/epjc/s10052-018-5752-x",
+    journal = "Eur. Phys. J. C",
+    volume = "78",
+    number = "4",
+    pages = "287",
+    year = "2018"
+}'
+ToDo:
+ - Implement the analysis, test it, remove this ToDo, and mark as VALIDATED :-)
+

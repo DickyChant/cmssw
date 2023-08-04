@@ -1,0 +1,36 @@
+Name: CMS_2022_I2170533
+Year: 2022
+Summary: Measurements of jet multiplicity and jet transverse momentum in multijet events in proton-proton collisions at \sqrt{s} = 13 TeV
+Experiment: CMS
+Collider: LHC
+InspireID: 2170533
+Status: UNVALIDATED
+Authors:
+ - cms-pag-conveners-smp@cern.ch
+ - Luis Ignacio Estevez Banos <luis.estevez.banos@desy.de>
+References:
+ - arXiv:2210.13557
+ - CMS-SMP-21-006
+ - TODO <EPJC reference>
+RunInfo: pp to jets at $\sqrt{s}=13$ TeV. Data collected by CMS during the year 2016.
+Beams: [p+, p+]
+Energies: [[6500,6500]]
+Luminosity_fb: 36.3
+Description:
+  'Multijet events at large transverse momentum (pT) are measured at $\sqrt{s}$ = 13 TeV using data recorded with the CMS detector at the LHC, corresponding to an integrated luminosity of 36.3 fb-1. The multiplicity of jets with pT > 50 GeV that are produced in association with a high-pT dijet system is measured in various ranges of the pT of the jet with the highest transverse momentum and as a function of the azimuthal angle difference between the two highest pT jets in the dijet system. The differential production cross sections are measured as a function of the transverse momenta of the four highest pT jets. The measurements are compared with leading and next-to-leading order matrix element calculations supplemented with simulations of parton shower, hadronization, and multiparton interactions. In addition, the measurements are compared with next-to-leading order matrix element calculations combined with transverse-momentum dependent parton densities and transverse-momentum dependent parton shower.'
+ReleaseTests:
+ - $A my-hepmc-prefix :MODE=some_rivet_flag
+Keywords: []
+BibKey: CMS:2022drg
+BibTeX: '@article{CMS:2022drg,
+    collaboration = "CMS",
+    title = "{Measurements of jet multiplicity and jet transverse momentum in multijet events in proton-proton collisions at $\sqrt{s}$ = 13 TeV}",
+    eprint = "2210.13557",
+    archivePrefix = "arXiv",
+    primaryClass = "hep-ex",
+    reportNumber = "CMS-SMP-21-006, CERN-EP-2022-144",
+    month = "10",
+    year = "2022"
+}'
+ToDo:
+ - Implement the analysis, test it, remove this ToDo, and mark as VALIDATED :-)
