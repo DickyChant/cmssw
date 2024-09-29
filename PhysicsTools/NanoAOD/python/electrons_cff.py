@@ -467,5 +467,5 @@ _electronTask_Run2.add(calibratedPatElectronsNano)
 run2_egamma.toReplaceWith(electronTask, _electronTask_Run2)
 
 # Revert back to AK4 CHS jets for Run2 inputs
-run2_nanoAOD_ANY.toModify(
-    ptRatioRelForEle,srcJet="updatedJets")
+# run2_nanoAOD_ANY.toModify(
+#     ptRatioRelForEle,srcJet="updatedJets")

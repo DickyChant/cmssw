@@ -184,9 +184,9 @@ muonTable = simpleCandidateFlatTableProducer.clone(
 
 
 # Revert back to AK4 CHS jets for Run 2
-run2_nanoAOD_ANY.toModify(
-    ptRatioRelForMu,srcJet="updatedJets"
-)
+# run2_nanoAOD_ANY.toModify(
+#     ptRatioRelForMu,srcJet="updatedJets"
+# )
 
 
 muonsMCMatchForTable = cms.EDProducer("MCMatcher",       # cut on deltaR, deltaPt/Pt; pick best by deltaR
