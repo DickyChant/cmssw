@@ -9,6 +9,7 @@ hiEvtAnalyzer = cms.EDAnalyzer('HiEvtAnalyzer',
    HiMC             = cms.InputTag("heavyIon"),                            
    Vertex           = cms.InputTag("offlineSlimmedPrimaryVertices"),
    HFfilters = cms.InputTag("hiHFfilters","hiHFfilters"),
+   METSrc         = cms.InputTag("slimmedMETs"),
    doCentrality     = cms.bool(True),
    doEvtPlane       = cms.bool(True),
    doEvtPlaneFlat   = cms.bool(True),                               
@@ -17,5 +18,6 @@ hiEvtAnalyzer = cms.EDAnalyzer('HiEvtAnalyzer',
    doHiMC           = cms.bool(False),
    useHepMC         = cms.bool(False),
    doHFfilters      = cms.bool(True),
-   evtPlaneLevel    = cms.int32(0)
+   evtPlaneLevel    = cms.int32(0),
+   doMET            = cms.bool(True)
 )

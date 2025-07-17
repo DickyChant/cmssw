@@ -29,6 +29,7 @@
 #include "DataFormats/HeavyIonEvent/interface/HFFilterInfo.h"  //this line is needed to access the HF Filters
 #include "DataFormats/PatCandidates/interface/PackedCandidate.h"
 #include "DataFormats/ParticleFlowCandidate/interface/PFCandidate.h"
+#include "DataFormats/PatCandidates/interface/MET.h"
 
 #include <HepMC/PdfInfo.h>
 
@@ -67,6 +68,8 @@ private:
   edm::EDGetTokenT<std::vector<PileupSummaryInfo>> puInfoToken_;
   edm::EDGetTokenT<GenEventInfoProduct> genInfoToken_;
   edm::EDGetTokenT<LHEEventProduct> generatorlheToken_;
+
+  edm::EDGetTokenT<reco::MET> METTag_;
 
   bool doEvtPlane_;
   bool doEvtPlaneFlat_;
@@ -138,6 +141,16 @@ private:
   unsigned long long event;
   unsigned int run;
   unsigned int lumi;
+
+  bool doMET_;
+
+  float hiPFMET_pt, hiPFMET_phi, hiPFMET_sumEt, hiPFMET_uncorPt, hiPFMET_uncorPhi, hiPFMET_uncorSumEt;
+  float hiPFMET_deepMETResolutionTune_pt, hiPFMET_deepMETResolutionTune_phi, hiPFMET_deepMETResponseTune_pt, hiPFMET_deepMETResponseTune_phi;
+  float hiPFMET_covXX, hiPFMET_covXY, hiPFMET_covYY;
+  float hiPFMET_significance;
+  float hiPFMET_sumPtUnclustered;
+  float hiPFMET_ptUnclusteredUp, hiPFMET_ptUnclusteredDown;
+  float hiPFMET_phiUnclusteredUp, hiPFMET_phiUnclusteredDown;
 };
 
 //
@@ -163,6 +176,7 @@ HiEvtAnalyzer::HiEvtAnalyzer(const edm::ParameterSet& iConfig)
       puInfoToken_(consumes<std::vector<PileupSummaryInfo>>(edm::InputTag("addPileupInfo"))),
       genInfoToken_(consumes<GenEventInfoProduct>(edm::InputTag("generator"))),
       generatorlheToken_(consumes<LHEEventProduct>(edm::InputTag("externalLHEProducer", ""))),
+      METTag_(consumes<reco::MET>(iConfig.getParameter<edm::InputTag>("METSrc"))),
       doEvtPlane_(iConfig.getParameter<bool>("doEvtPlane")),
       doEvtPlaneFlat_(iConfig.getParameter<bool>("doEvtPlaneFlat")),
       doCentrality_(iConfig.getParameter<bool>("doCentrality")),
@@ -171,7 +185,8 @@ HiEvtAnalyzer::HiEvtAnalyzer(const edm::ParameterSet& iConfig)
       doHFfilters_(iConfig.getParameter<bool>("doHFfilters")),
       useHepMC_(iConfig.getParameter<bool>("useHepMC")),
       doVertex_(iConfig.getParameter<bool>("doVertex")),
-      evtPlaneLevel_(iConfig.getParameter<int>("evtPlaneLevel")) {}
+      evtPlaneLevel_(iConfig.getParameter<int>("evtPlaneLevel")),
+      doMET_(iConfig.getParameter<bool>("doMET")) {}
 
 HiEvtAnalyzer::~HiEvtAnalyzer() {
   // do anything here that needs to be done at desctruction time
@@ -405,6 +420,34 @@ void HiEvtAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
     numMinHFTower5 = 0;
   }
 
+  if (doMET_) {
+    edm::Handle<edm::View<pat::MET>> metHandle;
+    iEvent.getByToken(METTag_, metHandle);
+
+    const auto& aMET = metHandle->at(0);
+
+    hiPFMET_pt = aMET.pt();
+    hiPFMET_phi = aMET.phi();
+    hiPFMET_sumEt = aMET.sumEt();
+    hiPFMET_uncorPt = aMET.uncorPt();
+    hiPFMET_uncorPhi = aMET.uncorPhi();
+    hiPFMET_uncorSumEt = aMET.uncorSumEt();
+    hiPFMET_deepMETResolutionTune_pt = aMET.corPt(pat::MET::RawDeepResolutionTune);
+    hiPFMET_deepMETResolutionTune_phi = aMET.corPhi(pat::MET::RawDeepResolutionTune);
+    hiPFMET_deepMETResponseTune_pt = aMET.corPt(pat::MET::RawDeepResponseTune);
+    hiPFMET_deepMETResponseTune_phi = aMET.corPhi(pat::MET::RawDeepResponseTune);  
+    hiPFMET_covXX = aMET.getSignificanceMatrix().At(0,0);
+    hiPFMET_covXY = aMET.getSignificanceMatrix().At(0,1);
+    hiPFMET_covYY = aMET.getSignificanceMatrix().At(1,1);
+    hiPFMET_significance = aMET.metSignificance();
+    hiPFMET_sumPtUnclustered = aMET.metSignificance();
+    hiPFMET_ptUnclusteredUp = aMET.shiftedPt(pat::MET::UnclusteredEnUp);
+    hiPFMET_ptUnclusteredDown = aMET.shiftedPt(pat::MET::UnclusteredEnDown);
+    hiPFMET_phiUnclusteredUp = aMET.shiftedPhi(pat::MET::UnclusteredEnUp);
+    hiPFMET_phiUnclusteredDown = aMET.shiftedPhi(pat::MET::UnclusteredEnDown);
+
+  }
+
   thi_->Fill();
 }
 
@@ -449,6 +492,28 @@ void HiEvtAnalyzer::beginJob() {
   numMinHFTower3 = -1;
   numMinHFTower4 = -1;
   numMinHFTower5 = -1;
+
+  hiPFMET_pt = -1.;
+  hiPFMET_phi = -1.;
+  hiPFMET_sumEt = -1.;
+  hiPFMET_uncorPt = -1.;
+  hiPFMET_uncorPhi = -1.;
+  hiPFMET_uncorSumEt = -1.;
+
+  hiPFMET_deepMETResolutionTune_pt = -1.;
+  hiPFMET_deepMETResolutionTune_phi = -1.;
+  hiPFMET_deepMETResponseTune_pt = -1.;
+  hiPFMET_deepMETResponseTune_phi = -1.;
+
+  hiPFMET_covXX = -1.;
+  hiPFMET_covXY = -1.;
+  hiPFMET_covYY = -1.;
+  hiPFMET_significance = -1.;
+  hiPFMET_sumPtUnclustered = -1.;
+  hiPFMET_ptUnclusteredUp = -1.;
+  hiPFMET_ptUnclusteredDown = -1.;
+  hiPFMET_phiUnclusteredUp = -1.;
+  hiPFMET_phiUnclusteredDown = -1.;
 
   // Run info
   thi_->Branch("run", &run, "run/i");
@@ -553,6 +618,29 @@ void HiEvtAnalyzer::beginJob() {
   if (doEvtPlane_) {
     thi_->Branch("hiNevtPlane", &nEvtPlanes, "hiNevtPlane/I");
     thi_->Branch("hiEvtPlanes", hiEvtPlane, "hiEvtPlanes[hiNevtPlane]/F");
+  }
+  
+  // MET
+
+  if (doMET_) {
+    thi_->Branch("hiPFMET_pt", &hiPFMET_pt, "hiPFMET_pt/F");
+    thi_->Branch("hiPFMET_phi", &hiPFMET_phi, "hiPFMET_phi/F");
+    thi_->Branch("hiPFMET_sumEt", &hiPFMET_sumEt, "hiPFMET_sumEt/F");
+    thi_->Branch("hiPFMET_uncorPt", &hiPFMET_uncorPt, "hiPFMET_uncorPt/F");
+    thi_->Branch("hiPFMET_uncorPhi", &hiPFMET_uncorPhi, "hiPFMET_uncorPhi/F");
+    thi_->Branch("hiPFMET_deepMETResolutionTune_pt", &hiPFMET_deepMETResolutionTune_pt, "hiPFMET_deepMETResolutionTune_pt/F");
+    thi_->Branch("hiPFMET_deepMETResolutionTune_phi", &hiPFMET_deepMETResolutionTune_phi, "hiPFMET_deepMETResolutionTune_phi/F");
+    thi_->Branch("hiPFMET_deepMETResponseTune_pt", &hiPFMET_deepMETResponseTune_pt, "hiPFMET_deepMETResponseTune_pt/F");
+    thi_->Branch("hiPFMET_deepMETResponseTune_phi", &hiPFMET_deepMETResponseTune_phi, "hiPFMET_deepMETResponseTune_phi/F");
+    thi_->Branch("hiPFMET_covXX", &hiPFMET_covXX, "hiPFMET_covXX/F");
+    thi_->Branch("hiPFMET_covXY", &hiPFMET_covXY, "hiPFMET_covXY/F");
+    thi_->Branch("hiPFMET_covYY", &hiPFMET_covYY, "hiPFMET_covYY/F");
+    thi_->Branch("hiPFMET_significance", &hiPFMET_significance, "hiPFMET_significance/F");
+    thi_->Branch("hiPFMET_sumPtUnclustered", &hiPFMET_sumPtUnclustered, "hiPFMET_sumPtUnclustered/F");
+    thi_->Branch("hiPFMET_ptUnclusteredUp", &hiPFMET_ptUnclusteredUp, "hiPFMET_ptUnclusteredUp/F");
+    thi_->Branch("hiPFMET_ptUnclusteredDown", &hiPFMET_ptUnclusteredDown, "hiPFMET_ptUnclusteredDown/F");
+    thi_->Branch("hiPFMET_phiUnclusteredUp", &hiPFMET_phiUnclusteredUp, "hiPFMET_phiUnclusteredUp/F");
+    thi_->Branch("hiPFMET_phiUnclusteredDown", &hiPFMET_phiUnclusteredDown, "hiPFMET_phiUnclusteredDown/F");
   }
 
   thi_->Branch("numMinHFTower2", &numMinHFTower2, "numMinHFTower2/I");
