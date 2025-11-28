@@ -430,7 +430,9 @@ bool Pythia8HepMC3Hadronizer::initializeForInternalPartons() {
     } else if (fInitialState == HeavyIons) {
       // let user set up the beam particles
     } else if (fInitialState == Angantyr) {
-      // let user set up the beam particles, Angantyr handles heavy-ion collisions
+      // Initialize Angantyr model for heavy-ion collisions
+      fMasterGen->settings.mode("HeavyIon:mode", 2);
+      // let user set up the beam particles (Beams:idA, Beams:idB) via Pythia8 settings
     } else {
       // throw on unknown initial state !
       throw edm::Exception(edm::errors::Configuration, "Pythia8Interface")
