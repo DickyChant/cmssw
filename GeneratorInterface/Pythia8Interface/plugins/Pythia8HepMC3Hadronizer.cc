@@ -160,6 +160,9 @@ private:
   //Following main70.cc example in PYTHIA8 v3.10
   edm::ParameterSet photonFluxParams;
 
+  //Angantyr heavy-ion parameters
+  edm::ParameterSet angantyrParams;
+
   //helper class to allow multiple user hooks simultaneously
   std::shared_ptr<UserHooksVector> fUserHooksVector;
   bool UserHooksSet;
@@ -267,6 +270,7 @@ Pythia8HepMC3Hadronizer::Pythia8HepMC3Hadronizer(const edm::ParameterSet &params
   } else if (params.exists("AngantyrInitialState")) {
     if (fInitialState == PP) {
       fInitialState = Angantyr;
+      angantyrParams = params.getParameter<edm::ParameterSet>("AngantyrInitialState");
       edm::LogInfo("GeneratorInterface|Pythia8Interface")
           << "Pythia8 will be initialized for ANGANTYR HEAVY ION collisions. "
           << "This is a user-request change from the DEFAULT PROTON-PROTON initial state.";
@@ -432,7 +436,15 @@ bool Pythia8HepMC3Hadronizer::initializeForInternalPartons() {
     } else if (fInitialState == Angantyr) {
       // Initialize Angantyr model for heavy-ion collisions
       fMasterGen->settings.mode("HeavyIon:mode", 2);
-      // let user set up the beam particles (Beams:idA, Beams:idB) via Pythia8 settings
+      // Set beam particles from process parameters if provided
+      if (!angantyrParams.empty()) {
+        if (angantyrParams.exists("beamA")) {
+          fMasterGen->settings.mode("Beams:idA", angantyrParams.getParameter<int>("beamA"));
+        }
+        if (angantyrParams.exists("beamB")) {
+          fMasterGen->settings.mode("Beams:idB", angantyrParams.getParameter<int>("beamB"));
+        }
+      }
     } else {
       // throw on unknown initial state !
       throw edm::Exception(edm::errors::Configuration, "Pythia8Interface")
