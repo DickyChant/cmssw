@@ -150,8 +150,8 @@ private:
   std::string LHEInputFileName;
   std::shared_ptr<LHAupLesHouches> lhaUP;
 
-  enum { PP, PPbar, ElectronPositron, HeavyIons };
-  int fInitialState;  // pp, ppbar, e-e+ or HI
+  enum { PP, PPbar, ElectronPositron, HeavyIons, Angantyr };
+  int fInitialState;  // pp, ppbar, e-e+, HI or Angantyr
 
   double fBeam1PZ;
   double fBeam2PZ;
@@ -264,10 +264,20 @@ Pythia8HepMC3Hadronizer::Pythia8HepMC3Hadronizer(const edm::ParameterSet &params
     } else {
       // probably need to throw on attempt to override ?
     }
+  } else if (params.exists("AngantyrInitialState")) {
+    if (fInitialState == PP) {
+      fInitialState = Angantyr;
+      edm::LogInfo("GeneratorInterface|Pythia8Interface")
+          << "Pythia8 will be initialized for ANGANTYR HEAVY ION collisions. "
+          << "This is a user-request change from the DEFAULT PROTON-PROTON initial state.";
+    } else {
+      // probably need to throw on attempt to override ?
+    }
   } else if (params.exists("ElectronProtonInitialState") || params.exists("PositronProtonInitialState")) {
     // throw on unknown initial state !
     throw edm::Exception(edm::errors::Configuration, "Pythia8Interface")
-        << " UNKNOWN INITIAL STATE. \n The allowed initial states are: PP, PPbar, ElectronPositron \n";
+        << " UNKNOWN INITIAL STATE. \n The allowed initial states are: PP, PPbar, ElectronPositron, HeavyIons, "
+           "Angantyr \n";
   }
 
   // avoid filling weights twice (from v8.30x)
@@ -419,10 +429,13 @@ bool Pythia8HepMC3Hadronizer::initializeForInternalPartons() {
       fMasterGen->settings.mode("Beams:idB", -11);
     } else if (fInitialState == HeavyIons) {
       // let user set up the beam particles
+    } else if (fInitialState == Angantyr) {
+      // let user set up the beam particles, Angantyr handles heavy-ion collisions
     } else {
       // throw on unknown initial state !
       throw edm::Exception(edm::errors::Configuration, "Pythia8Interface")
-          << " UNKNOWN INITIAL STATE. \n The allowed initial states are: PP, PPbar, ElectronPositron, HeavyIons \n";
+          << " UNKNOWN INITIAL STATE. \n The allowed initial states are: PP, PPbar, ElectronPositron, HeavyIons, "
+             "Angantyr \n";
     }
     fMasterGen->settings.parm("Beams:eCM", comEnergy);
   } else {
