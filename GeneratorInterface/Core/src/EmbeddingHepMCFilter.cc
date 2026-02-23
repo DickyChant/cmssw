@@ -119,8 +119,18 @@ bool EmbeddingHepMCFilter::filter(const HepMC::GenEvent *evt) {
 
 void EmbeddingHepMCFilter::decay_and_sump4Vis(HepMC::GenParticle *particle, reco::Candidate::LorentzVector &p4Vis) {
   bool decaymode_known = false;
-  for (HepMC::GenVertex::particle_iterator daughter = particle->end_vertex()->particles_begin(HepMC::children);
-       daughter != particle->end_vertex()->particles_end(HepMC::children);
+  
+  auto vtx = particle->end_vertex();
+  
+  if (!vtx) {
+    edm::LogWarning("EmbeddingHepMCFilter")
+        << "Particle with pdg_id " << particle->pdg_id() << " and status " << particle->status()
+        << " has no end_vertex. Cannot determine daughters.";
+    return;
+  }
+    
+  for (HepMC::GenVertex::particle_iterator daughter = vtx->particles_begin(HepMC::children);
+       daughter != vtx->particles_end(HepMC::children);
        ++daughter) {
     bool neutrino = (std::abs((*daughter)->pdg_id()) == tauon_neutrino_PDGID_) ||
                     (std::abs((*daughter)->pdg_id()) == muon_neutrino_PDGID_) ||
