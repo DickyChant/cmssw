@@ -42,7 +42,8 @@ public:
           instanceName(pset.getUntrackedParameter<std::string>("instanceName")),
           tempDir(pset.getUntrackedParameter<std::string>("tempDir")),
           imageName(pset.getUntrackedParameter<std::string>("imageName")),
-          sandboxDir(pset.getUntrackedParameter<std::string>("sandboxDir")) {
+          sandboxDir(pset.getUntrackedParameter<std::string>("sandboxDir")),
+          dumpInputs(pset.getUntrackedParameter<bool>("dumpInputs")) {
       //randomize instance name
       if (instanceName.empty()) {
         instanceName =
@@ -61,6 +62,7 @@ public:
     std::string tempDir;
     std::string imageName;
     std::string sandboxDir;
+    bool dumpInputs;
     std::string command;
   };
   struct Server {
