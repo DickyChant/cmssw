@@ -297,8 +297,10 @@ void TritonService::preBeginJob(edm::ProcessContext const&) {
     fallbackOpts_.command += " -i " + fallbackOpts_.imageName;
   if (!fallbackOpts_.sandboxDir.empty())
     fallbackOpts_.command += " -s " + fallbackOpts_.sandboxDir;
-  if (fallbackOpts_.dumpInputs)
-    fallbackOpts_.command += " -e SONIC_DUMP_INPUTS=1";
+  if (fallbackOpts_.debugProxy)
+    fallbackOpts_.command += " -k debug_proxy=true";
+  if (fallbackOpts_.dumpAlways)
+    fallbackOpts_.command += " -k dump_always=true";
   //don't need this anymore
   unservedModels_.clear();
 
@@ -451,7 +453,8 @@ void TritonService::fillDescriptions(edm::ConfigurationDescriptions& description
   fallbackDesc.addUntracked<std::string>("tempDir", "");
   fallbackDesc.addUntracked<std::string>("imageName", "");
   fallbackDesc.addUntracked<std::string>("sandboxDir", "");
-  fallbackDesc.addUntracked<bool>("dumpInputs", false);
+  fallbackDesc.addUntracked<bool>("debugProxy", false);
+  fallbackDesc.addUntracked<bool>("dumpAlways", false);
   desc.add<edm::ParameterSetDescription>("fallback", fallbackDesc);
 
   descriptions.addWithDefaultLabel(desc);

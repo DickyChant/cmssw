@@ -22,6 +22,7 @@ NPORTS=3
 IMAGE=fastml/triton-torchgeo:25.08-py3-geometric
 SANDBOX=""
 ENVARGS=""
+CFGPARAMS=""
 COMPAT_USR=""
 EXTRAPATH=/cvmfs/oasis.opensciencegrid.org/mis/apptainer/current/bin
 OSVERSION=$(sed -nr 's/[^0-9]*([0-9]+).*/\1/p' /etc/redhat-release)
@@ -51,6 +52,7 @@ usage() {
 	$ECHO "-d [exe]    \t container choice: apptainer, docker, podman, podman-hpc (default: ${CONTAINER})"
 	$ECHO "-e [VAR=VAL]\t environment variable to pass to container (can be given more than once)"
 	$ECHO "-E [path]   \t include extra path(s) for executables (default: ${EXTRAPATH})"
+	$ECHO "-k [K=V]    \t config.pbtxt parameter to inject into model configs (can be given more than once)"
 	$ECHO "-f          \t force reuse of (possibly) existing container instance"
 	$ECHO "-g [device] \t device choice: auto (try to detect GPU), CPU, GPU (default: ${DEVICE})"
 	$ECHO "-i [name]   \t server image name (default: ${IMAGE})"
@@ -80,7 +82,7 @@ if [ -e /run/shm ]; then
 	SHM=/run/shm
 fi
 
-while getopts "cC:Dd:e:fg:i:I:M:m:n:P:p:r:s:t:vw:h" opt; do
+while getopts "cC:Dd:e:fg:i:I:k:M:m:n:P:p:r:s:t:vw:h" opt; do
 	case "$opt" in
 		c) CLEANUP=""
 		;;
@@ -93,6 +95,8 @@ while getopts "cC:Dd:e:fg:i:I:M:m:n:P:p:r:s:t:vw:h" opt; do
 		e) ENVARGS="$ENVARGS $OPTARG"
 		;;
 		f) FORCE=true
+		;;
+		k) CFGPARAMS="$CFGPARAMS $OPTARG"
 		;;
 		g) DEVICE="$OPTARG"
 		;;
@@ -411,7 +415,12 @@ wait_server(){
 list_models(){
 	# make list of model repositories
 	LOCALMODELREPO="local_model_repo"
-	if [ -n "$THREADCONTROL" ]; then
+	NEEDCOPY=""
+	if [ -n "$THREADCONTROL" ] || [ -n "$CFGPARAMS" ]; then
+		NEEDCOPY=true
+	fi
+
+	if [ -n "$NEEDCOPY" ]; then
 		if [ -d "$TMPDIR/$LOCALMODELREPO" ]; then
 			#Want to start with a fresh copy of model files in case this directory already exists with local edits
 			rm -rf $TMPDIR/$LOCALMODELREPO
@@ -429,18 +438,38 @@ list_models(){
 		if [ -f "$MODEL" ]; then
 			MODEL="$(dirname "$MODEL")"
 		fi
-		if [ -n "$THREADCONTROL" ]; then
-			$DRYRUN cmsTritonConfigTool threadcontrol -c ${MODEL}/config.pbtxt --copy $TMPDIR/$LOCALMODELREPO --nThreads $INSTANCES
-			TOOL_EXIT=$?
-			if [ "$TOOL_EXIT" -ne 0 ]; then
-				echo "Could not apply threadcontrol to $MODEL"
-				exit "$TOOL_EXIT"
+		if [ -n "$NEEDCOPY" ]; then
+			if [ -n "$THREADCONTROL" ]; then
+				$DRYRUN cmsTritonConfigTool threadcontrol -c ${MODEL}/config.pbtxt --copy $TMPDIR/$LOCALMODELREPO --nThreads $INSTANCES
+				TOOL_EXIT=$?
+				if [ "$TOOL_EXIT" -ne 0 ]; then
+					echo "Could not apply threadcontrol to $MODEL"
+					exit "$TOOL_EXIT"
+				fi
+			else
+				# copy model dir for config parameter injection
+				$DRYRUN cp -r ${MODEL} $TMPDIR/$LOCALMODELREPO/
+			fi
+			if [ -n "$CFGPARAMS" ]; then
+				MODELNAME=$(basename ${MODEL})
+				PARAM_ARGS=""
+				for KV in $CFGPARAMS; do
+					KEY="${KV%%=*}"
+					VAL="${KV#*=}"
+					PARAM_ARGS="$PARAM_ARGS $KEY $VAL"
+				done
+				$DRYRUN cmsTritonConfigTool addparams -c $TMPDIR/$LOCALMODELREPO/$MODELNAME/config.pbtxt --params $PARAM_ARGS
+				TOOL_EXIT=$?
+				if [ "$TOOL_EXIT" -ne 0 ]; then
+					echo "Could not apply config parameters to $MODEL"
+					exit "$TOOL_EXIT"
+				fi
 			fi
 		else
 			REPOS+=("$(dirname "$MODEL")")
 		fi
 	done
-	if [ -n "$THREADCONTROL" ]; then
+	if [ -n "$NEEDCOPY" ]; then
 		REPOS=$TMPDIR/$LOCALMODELREPO
 	else
 		for ((r=0; r < ${#REPOS[@]}; r++)); do
@@ -684,7 +713,7 @@ elif [ "$OP" == start ]; then
 		make_tmp
 
 		# if we plan on editing model configs, must copy files into /tmp/local_model_repo, which is deleted upon retry
-		if [ "$counter" -eq 0 ] || [ -n "$THREADCONTROL" ]; then list_models; fi
+		if [ "$counter" -eq 0 ] || [ -n "$THREADCONTROL" ] || [ -n "$CFGPARAMS" ]; then list_models; fi
 
 		# only need to check drivers if using GPU
 		if [ "$DEVICE" == gpu ]; then

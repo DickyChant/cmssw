@@ -357,6 +357,24 @@ def cfg_versioncheck(args):
     if len(msg)>0:
         raise RuntimeError("\n".join(msg+instr))
 
+def cfg_addparams(args):
+    for key, val in args.params.items():
+        item = args.model.parameters.get_or_create(key)
+        item.string_value = val
+
+    if args.copy:
+        config_dir = os.path.dirname(args.config)
+        copy_dir = args.copy
+        new_config_dir = os.path.join(copy_dir, pathlib.Path(config_dir).name)
+        if not os.path.exists(new_config_dir):
+            shutil.copytree(config_dir, new_config_dir)
+        args.copy = new_config_dir
+
+    update_config(args)
+
+    if args.view:
+        cfg_view(args)
+
 def cfg_threadcontrol(args):
     # copy the entire model, not just config.pbtxt
     config_dir = os.path.dirname(args.config)
@@ -451,6 +469,12 @@ if __name__=="__main__":
     parser_threadcontrol = subparsers.add_parser("threadcontrol", parents=[_parser_common, _parser_copy_req, _parser_view_args], help="enable thread controls")
     parser_threadcontrol.add_argument("--nThreads", type=int, required=True, help="number of threads")
     parser_threadcontrol.set_defaults(func=cfg_threadcontrol)
+
+    parser_addparams = subparsers.add_parser("addparams", parents=[_parser_common, _parser_copy, _parser_view_args],
+        help="add parameters to config.pbtxt (merge, not replace)")
+    parser_addparams.add_argument("--params", type=str, nargs='*', metavar="key value", action=DictAction,
+        required=True, help="key value pairs to add to the parameters map")
+    parser_addparams.set_defaults(func=cfg_addparams)
 
     args = parser.parse_args()
     args.model_info = model_info
