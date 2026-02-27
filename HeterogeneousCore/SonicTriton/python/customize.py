@@ -36,6 +36,8 @@ def getParser():
     parser.add_argument("--imageName", default="", type=str, help="container image name for fallback server")
     parser.add_argument("--sandboxDir", default="", type=str, help="apptainer sandbox directory")
     parser.add_argument("--tempDir", default="", type=str, help="temp directory for fallback server")
+    parser.add_argument("--debugProxy", default=False, action="store_true", help="enable debug proxy for fallback server")
+    parser.add_argument("--dumpAlways", default=False, action="store_true", help="dump inputs for every request in fallback server")
 
     return parser
 
@@ -74,6 +76,8 @@ def applyOptions(process, options, applyToModules=False):
         process.TritonService.fallback.sandboxDir = options.sandboxDir
         process.TritonService.fallback.tempDir = options.tempDir
         process.TritonService.fallback.device = options.device
+        process.TritonService.fallback.debugProxy = options.debugProxy
+        process.TritonService.fallback.dumpAlways = options.dumpAlways
         if len(options.fallbackName)>0:
             process.TritonService.fallback.instanceBaseName = options.fallbackName
         if len(options.address)>0:
