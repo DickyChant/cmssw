@@ -1,0 +1,29 @@
+# Branch filtering for triphoton analysis
+# Keep photon/diphoton/triphoton triggers (unlike EWAA which dropped them)
+keep *
+drop nTrigObj*
+drop TrigObj*
+drop L1_*
+drop GenPart_*
+drop HLT_AK*
+drop HLT_DoubleMu4*
+drop HLT_Mu7p5*
+drop HLT_IsoMu20*
+drop HLT_IsoMu24*
+drop HLT_L2Mu*
+drop HLT_DiPFJet*
+drop HLT_Calo*
+drop HLT_DoublePF*
+drop HLT_BTag*
+drop HLT_Dimuon*
+drop HLT_DoubleMu*
+drop HLT_ZeroBias*
+drop HLT_QuadPFJet*
+drop HLT_Rsq*
+drop HLT_MediumChargedIsoPF*
+drop HLT_DoubleTightChargedIsoPFTau*
+drop HLT_DoubleMediumChargedIsoPFTau*
+drop HLT_DoubleLooseChargedIsoPFTau*
+drop HLT_HISinglePhoton*
+drop HLT_Physics_part*
+drop HLT_TripleMu*
