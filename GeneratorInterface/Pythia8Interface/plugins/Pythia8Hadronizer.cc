@@ -166,6 +166,14 @@ private:
   //Angantyr heavy-ion parameters
   edm::ParameterSet angantyrParams;
 
+  // If true, skip the expensive Pythia8::init() call on every LS after the
+  // first one for the Angantyr path. Saves the SigFit scan cost at the cost
+  // of not picking up per-LS setting changes. Only honored when
+  // fInitialState == Angantyr. Default off (refit every LS, matches legacy).
+  bool skipAngantyrRefit_ = false;
+  // Latched true after fMasterGen->init() succeeds; guards the skip above.
+  bool masterGenInitialized_ = false;
+
   //helper class to allow multiple user hooks simultaneously
   std::shared_ptr<UserHooksVector> fUserHooksVector;
   bool UserHooksSet;
@@ -294,9 +302,11 @@ Pythia8Hadronizer::Pythia8Hadronizer(const edm::ParameterSet &params)
     if (fInitialState == PP) {
       fInitialState = Angantyr;
       angantyrParams = params.getParameter<edm::ParameterSet>("AngantyrInitialState");
+      skipAngantyrRefit_ = angantyrParams.getUntrackedParameter<bool>("skipRefit", false);
       edm::LogInfo("GeneratorInterface|Pythia8Interface")
           << "Pythia8 will be initialized for ANGANTYR HEAVY ION collisions. "
-          << "This is a user-request change from the DEFAULT PROTON-PROTON initial state.";
+          << "This is a user-request change from the DEFAULT PROTON-PROTON initial state."
+          << (skipAngantyrRefit_ ? " skipRefit=true: fMasterGen->init() will only run on the first LS." : "");
     } else {
       // probably need to throw on attempt to override ?
     }
@@ -444,6 +454,16 @@ Pythia8Hadronizer::~Pythia8Hadronizer() {}
 
 bool Pythia8Hadronizer::initializeForInternalPartons() {
   bool status = false, status1 = false;
+
+  // If the user opted into Angantyr skipRefit, after the very first successful
+  // initialization we leave fMasterGen and fDecayer untouched on subsequent LS
+  // transitions — reusing the fitted Angantyr state in memory and skipping the
+  // (expensive) SigFit scan. Random engine updates happen outside this method.
+  if (fInitialState == Angantyr && skipAngantyrRefit_ && masterGenInitialized_) {
+    edm::LogInfo("Pythia8Interface")
+        << "Skipping MasterGen re-initialization (Angantyr, skipRefit=true); reusing previously fitted state.";
+    return true;
+  }
 
   if (lheFile_.empty()) {
     if (fInitialState == PP)  // default
@@ -621,6 +641,8 @@ bool Pythia8Hadronizer::initializeForInternalPartons() {
 
   edm::LogInfo("Pythia8Interface") << "Initializing MasterGen";
   status = fMasterGen->init();
+  if (status)
+    masterGenInitialized_ = true;
 
   //clean up temp file
   if (!slhafile_.empty()) {
