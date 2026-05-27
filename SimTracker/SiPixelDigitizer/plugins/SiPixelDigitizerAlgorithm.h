@@ -236,6 +236,24 @@ private:
     std::map<uint32_t, double> ChipGeomFactors;
     std::map<uint32_t, size_t> iPU;
 
+    // Per-layer override of the dynamic-inefficiency PU scale.
+    // Indices: 0..3 = BPix1..4, 4..6 = FPix1..3. A negative entry means
+    // "use the payload polynomial as usual". A value >= 0 is substituted in
+    // place of pu_scale[...] for every column in that layer/disk.
+    std::vector<double> overrideLayerEfficiency;
+
+    inline double effectivePuScale(int subdet, int layerOrDisk, double defaultVal) const {
+      int idx = -1;
+      if (subdet == 1 && layerOrDisk >= 1 && layerOrDisk <= 4)
+        idx = layerOrDisk - 1;
+      else if (subdet == 2 && layerOrDisk >= 1 && layerOrDisk <= 3)
+        idx = 4 + (layerOrDisk - 1);
+      if (idx >= 0 && idx < static_cast<int>(overrideLayerEfficiency.size()) &&
+          overrideLayerEfficiency[idx] >= 0.0)
+        return overrideLayerEfficiency[idx];
+      return defaultVal;
+    }
+
     // constants for ROC level simulation for Phase1
     enum shiftEnumerator { FPixRocIdShift = 3, BPixRocIdShift = 6 };
     static const int rocIdMaskBits = 0x1F;

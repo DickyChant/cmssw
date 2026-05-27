@@ -464,6 +464,14 @@ SiPixelDigitizerAlgorithm::PixelEfficiencies::PixelEfficiencies(const edm::Param
   // Don't use Hard coded values, read inefficiencies in from DB/python config or don't use any
   int NumberOfTotLayers = NumberOfBarrelLayers + NumberOfEndcapDisks;
   FPixIndex = NumberOfBarrelLayers;
+
+  // Optional per-layer/disk override of the dynamic-inefficiency PU scale.
+  // Indices: 0..3 = BPix1..4, 4..6 = FPix1..3. Negative => use payload polynomial.
+  overrideLayerEfficiency = conf.getUntrackedParameter<std::vector<double> >(
+      "OverrideLayerEfficiency", std::vector<double>(7, -1.0));
+  if (overrideLayerEfficiency.size() < 7)
+    overrideLayerEfficiency.resize(7, -1.0);
+
   if (AddPixelInefficiency) {
     FromConfig = conf.exists("thePixelColEfficiency_BPix1") && conf.exists("thePixelColEfficiency_BPix2") &&
                  conf.exists("thePixelColEfficiency_BPix3") && conf.exists("thePixelColEfficiency_FPix1") &&
@@ -1966,7 +1974,8 @@ void SiPixelDigitizerAlgorithm::pixel_inefficiency(const PixelEfficiencies& eff,
           module -= 4;
 
         columnEfficiency *= eff.theLadderEfficiency_BPix[layerIndex - 1][ladder - 1] *
-                            eff.theModuleEfficiency_BPix[layerIndex - 1][module - 1] * eff.pu_scale[layerIndex - 1];
+                            eff.theModuleEfficiency_BPix[layerIndex - 1][module - 1] *
+                            eff.effectivePuScale(1, layerIndex, eff.pu_scale[layerIndex - 1]);
       }
     } else if (pixdet->subDetector() == GeomDetEnumerators::SubDetector::PixelEndcap ||
                pixdet->subDetector() == GeomDetEnumerators::SubDetector::P1PXEC ||
@@ -1996,9 +2005,11 @@ void SiPixelDigitizerAlgorithm::pixel_inefficiency(const PixelEfficiencies& eff,
         }
         if ((panelIndex == 1 && (moduleIndex == 1 || moduleIndex == 2)) ||
             (panelIndex == 2 && moduleIndex == 1)) {  //inner modules
-          columnEfficiency *= eff.theInnerEfficiency_FPix[diskIndex - 1] * eff.pu_scale[3];
+          columnEfficiency *= eff.theInnerEfficiency_FPix[diskIndex - 1] *
+                              eff.effectivePuScale(2, diskIndex, eff.pu_scale[3]);
         } else {  //outer modules
-          columnEfficiency *= eff.theOuterEfficiency_FPix[diskIndex - 1] * eff.pu_scale[4];
+          columnEfficiency *= eff.theOuterEfficiency_FPix[diskIndex - 1] *
+                              eff.effectivePuScale(2, diskIndex, eff.pu_scale[4]);
         }
       }  // current detector, forward
     } else if (pixdet->subDetector() == GeomDetEnumerators::SubDetector::P2OTB ||
@@ -2010,7 +2021,20 @@ void SiPixelDigitizerAlgorithm::pixel_inefficiency(const PixelEfficiencies& eff,
     }       // if barrel/forward
   } else {  // Load precomputed factors from Database
     pixelEfficiency = eff.PixelGeomFactors.at(detID);
-    columnEfficiency = eff.ColGeomFactors.at(detID) * eff.pu_scale[eff.iPU.at(detID)];
+    double basePuScale = eff.pu_scale[eff.iPU.at(detID)];
+    int subdetForOverride = 0;
+    int layerOrDiskForOverride = 0;
+    if (pixdet->subDetector() == GeomDetEnumerators::SubDetector::PixelBarrel ||
+        pixdet->subDetector() == GeomDetEnumerators::SubDetector::P1PXB) {
+      subdetForOverride = 1;
+      layerOrDiskForOverride = tTopo->pxbLayer(detID);
+    } else if (pixdet->subDetector() == GeomDetEnumerators::SubDetector::PixelEndcap ||
+               pixdet->subDetector() == GeomDetEnumerators::SubDetector::P1PXEC) {
+      subdetForOverride = 2;
+      layerOrDiskForOverride = tTopo->pxfDisk(detID);
+    }
+    columnEfficiency = eff.ColGeomFactors.at(detID) *
+                       eff.effectivePuScale(subdetForOverride, layerOrDiskForOverride, basePuScale);
     chipEfficiency = eff.ChipGeomFactors.at(detID);
     if (isPhase1) {
       for (unsigned int i_roc = 0; i_roc < eff.PixelGeomFactorsROCStdPixels.at(detID).size(); ++i_roc) {
