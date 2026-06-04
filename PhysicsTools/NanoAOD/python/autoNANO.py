@@ -104,6 +104,13 @@ autoNANO = {
     # Custom BTV Nano for SF measurements or tagger training
     'BTV': {'sequence': '@PHYS',
             'customize': '@PHYS+PhysicsTools/NanoAOD/custom_btv_cff.BTVCustomNanoAOD'},
+    # Heavy-ion (HIN) flavours: PHYS + PF/track + ZDC + HF/centrality tables
+    # HINUPC: ultra-peripheral collisions (HF + ZDC, no centrality bin)
+    'HINUPC': {'sequence': '@PHYS',
+               'customize': '@PHYS+PhysicsTools/NanoAOD/custom_hin_cff.HINUPCCustomNanoAOD'},
+    # HINHAD: hadronic heavy-ion events (full centrality incl. hiBin)
+    'HINHAD': {'sequence': '@PHYS',
+               'customize': '@PHYS+PhysicsTools/NanoAOD/custom_hin_cff.HINHADCustomNanoAOD'},
     # NANOGEN (from LHE/GEN/AOD)
     'GEN': {'sequence': 'PhysicsTools/NanoAOD/nanogen_cff.nanogenSequence',
             'customize': 'PhysicsTools/NanoAOD/nanogen_cff.customizeNanoGEN'},
