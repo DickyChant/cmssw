@@ -257,11 +257,14 @@ void HiInclusiveJetTableProducer::produce(edm::Event& iEvent, const edm::EventSe
         candidates.emplace_back(d->px(), d->py(), d->pz(), d->energy());
       if (!candidates.empty()) {
         fastjet::ClusterSequence cs(candidates, wtaJetDef_);
-        const auto wtajt = fastjet::sorted_by_pt(cs.inclusive_jets(0));
+        std::vector<fastjet::PseudoJet> wtajt = fastjet::sorted_by_pt(cs.inclusive_jets(0));
         if (!wtajt.empty()) {
           weta = wtajt[0].eta();
           wphi = wtajt[0].phi_std();
         }
+        // release the PseudoJets still tied to the ClusterSequence before it goes
+        // out of scope, to avoid fastjet's "out of scope" warning per jet.
+        wtajt.clear();
       }
     }
     wtaEta.push_back(weta);

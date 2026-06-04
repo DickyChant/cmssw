@@ -193,6 +193,63 @@ def addCentralityTable(process, addBin=True):
     return process
 
 
+def addHIJets(process, labels=("4", "4Flow"), doBtagging=False, jetPtMin=15.0):
+    """Schedule the heavy-ion jet reconstruction (constituent-subtracted akCs PF jets
+    and flow-subtracted akCsFlow PF jets) from the forest setup, and tabulate the
+    resulting pat::Jets as NanoAOD FlatTables via HiInclusiveJetTableProducer.
+
+    Reuses HeavyIonsAnalysis.JetAnalysis.setupJets_PbPb_cff.candidateBtaggingMiniAOD
+    (the same reco the forest config runs). On a plain CMSSW area without the forest
+    package this is a no-op (so HINHAD still imports on the non-forest branch).
+    """
+    try:
+        from HeavyIonsAnalysis.JetAnalysis.setupJets_PbPb_cff import candidateBtaggingMiniAOD
+    except ImportError:
+        print("[custom_hin_cff] HeavyIonsAnalysis jet setup not found -> skipping HI jets. "
+              "Use the forest+nano branch (hin_nanoaod_hadronic_*) for HINHAD jets.")
+        return process
+
+    # data vs MC: is the MC nano sequence actually scheduled? (same check BTVNano uses)
+    isMC = (hasattr(process, "nanoSequenceMC") and getattr(process, "schedule", None) is not None
+            and process.schedule.contains(process.nanoSequenceMC))
+    jetCorrLevels = ["L2Relative", "L3Absolute"] if isMC else ["L2Relative", "L2L3Residual"]
+
+    # candidateBtaggingMiniAOD associates its reco tasks to process.forest; provide a stub
+    # path (added to the schedule) so the unscheduled reco modules actually run.
+    if not hasattr(process, "forest"):
+        process.forest = cms.Path()
+        if getattr(process, "schedule", None) is not None:
+            process.schedule.append(process.forest)
+
+    process.hiJetTableTask = cms.Task()
+    _associate(process, process.hiJetTableTask)
+
+    for label in labels:
+        candidateBtaggingMiniAOD(process, isMC=isMC, jetPtMin=jetPtMin,
+                                 jetCorrLevels=jetCorrLevels, doBtagging=doBtagging, labelR=label)
+        coll = "selectedUpdatedPatJetsAK" + label + "PFBtag"
+        tabname = "akCs" + label + "PFJet"  # akCs4PFJet, akCs4FlowPFJet
+        rParam = 0.4 if label == "0" else float(label.replace("Flow", "")) * 0.1
+        setattr(process, tabname + "Table", cms.EDProducer(
+            "HiInclusiveJetTableProducer",
+            jets=cms.InputTag(coll),
+            pfCandidates=cms.InputTag("packedPFCandidates"),
+            name=cms.string(tabname),
+            doc=cms.string("Heavy-ion inclusive jets (" + tabname + ")"),
+            precision=cms.int32(-1),
+            jetPtMin=cms.double(jetPtMin),
+            jetAbsEtaMax=cms.double(2.5),
+            rParam=cms.double(rParam),
+            hardPtMin=cms.double(4.0),
+            trackQuality=cms.string("highPurity"),
+            useQuality=cms.bool(True),
+            doHiJetID=cms.bool(True),
+            doWTARecluster=cms.bool(True),
+        ))
+        process.hiJetTableTask.add(getattr(process, tabname + "Table"))
+    return process
+
+
 # ---------------------------------------------------------------------------
 #  Flavour entry points (referenced from autoNANO.py)
 # ---------------------------------------------------------------------------
@@ -207,6 +264,7 @@ def HINHADCustomNanoAOD(process):
     addHIPFCands(process)
     addZDCTable(process)
     addCentralityTable(process, addBin=True)  # full centrality incl. hiBin
+    addHIJets(process)                        # akCs4PF + akCs4FlowPF HI jets (forest reco)
     return process
 
 
