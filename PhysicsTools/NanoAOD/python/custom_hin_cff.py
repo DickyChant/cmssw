@@ -144,16 +144,36 @@ def _associate(process, task):
 
 
 def addHIPFCands(process):
-    """Add the PF-candidate and lost-track tables (BTVNano-like content)."""
-    process.hinPFCandTable = hinPFCandTable.clone()
+    """All packed PF candidates (with track details) + lost tracks.
+
+    Central Run-3 NanoAOD already ships a 'PFCand' table built from the jet-constituent
+    merge (finalPFCandidates). Heavy-ion analyses want ALL packed PF candidates, so we
+    repoint that existing table (and the jet-constituent index table, to keep its indices
+    consistent) to packedPFCandidates with our track-detail variables, instead of adding a
+    second, colliding 'PFCand' table.
+    """
+    if hasattr(process, "pfCandidatesTable"):
+        process.pfCandidatesTable.src = cms.InputTag("packedPFCandidates")
+        process.pfCandidatesTable.variables = _pfCandVars
+        for t in ("finalJetsAK8ConstituentsTable", "finalJetsConstituentsTable",
+                  "customAK4ConstituentsTable", "customAK8ConstituentsTable"):
+            if hasattr(process, t):
+                getattr(process, t).candidates = cms.InputTag("packedPFCandidates")
+    else:
+        process.hinPFCandTable = hinPFCandTable.clone()
+        process.hinPFCandsTask = cms.Task(process.hinPFCandTable)
+        _associate(process, process.hinPFCandsTask)
     process.hinLostTrackTable = hinLostTrackTable.clone()
-    process.hinPFCandsTask = cms.Task(process.hinPFCandTable, process.hinLostTrackTable)
-    _associate(process, process.hinPFCandsTask)
+    process.hinLostTrackTask = cms.Task(process.hinLostTrackTable)
+    _associate(process, process.hinLostTrackTask)
     return process
 
 
 def addZDCTable(process):
     """Reconstruct Run-3 ZDC rechits and add the ZDC rechit + per-side-sum tables."""
+    # ZdcHitReconstructor_Run3 needs the HcalSeverityLevelComputerRcd record
+    # (same ES producer the forest loads before its ZDC sequence).
+    process.load("RecoLocalCalo.HcalRecAlgos.hcalRecAlgoESProd_cfi")
     process.zdcrecoRun3 = zdcrecoRun3.clone()
     process.zdcTable = zdcTable.clone()
     process.zdcTableTask = cms.Task(process.zdcrecoRun3, process.zdcTable)
