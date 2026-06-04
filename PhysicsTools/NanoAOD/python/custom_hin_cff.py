@@ -118,19 +118,21 @@ zdcTable = cms.EDProducer(
 # ---------------------------------------------------------------------------
 #  Centrality / HF event activity (HiEvtAnalyzer content)
 # ---------------------------------------------------------------------------
+# "GO" = heavy-ion Global Observables (event-level): centrality bin + HF/ECAL/ZDC
+# sums and pixel/track multiplicities (the HiEvtAnalyzer event-level content).
 centralityTable = cms.EDProducer(
     "CentralityTableProducer",
     src=cms.InputTag("hiCentrality"),
     srcBin=cms.InputTag("centralityBin", "HFtowers"),
-    name=cms.string("Cent"),
-    doc=cms.string("Heavy-ion event activity: HF / ECAL / ZDC sums, multiplicities and centrality bin"),
+    name=cms.string("GO"),
+    doc=cms.string("Heavy-ion global observables: centrality bin, HF/ECAL/ZDC sums, multiplicities"),
     precision=cms.int32(10),
 )
 
 # UPC variant: HF / ZDC sums but no centrality bin.
 hfTable = centralityTable.clone(
     srcBin=cms.InputTag(""),
-    doc=cms.string("Heavy-ion event activity for UPC: HF / ECAL / ZDC sums (no centrality bin)"),
+    doc=cms.string("Heavy-ion global observables (UPC): HF / ECAL / ZDC sums (no centrality bin)"),
 )
 
 
