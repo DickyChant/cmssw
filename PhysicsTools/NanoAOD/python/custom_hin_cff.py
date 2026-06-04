@@ -250,6 +250,33 @@ def addHIJets(process, labels=("4", "4Flow"), doBtagging=False, jetPtMin=15.0):
     return process
 
 
+def addHITracks(process):
+    """Unpack reco::Tracks + vertices from packedPFCandidates (forest
+    TrackAndVertexUnpacker) and tabulate them as the Trk + Vtx FlatTables.
+    No-op if the forest TrackAnalysis package is absent."""
+    try:
+        from HeavyIonsAnalysis.TrackAnalysis.unpackedTracksAndVertices_cfi import unpackedTracksAndVertices
+    except ImportError:
+        print("[custom_hin_cff] HeavyIonsAnalysis TrackAnalysis not found -> skipping HI tracks.")
+        return process
+    process.unpackedTracksAndVertices = unpackedTracksAndVertices.clone()
+    process.trkTable = cms.EDProducer(
+        "TrackTableProducer",
+        trackSrc=cms.InputTag("unpackedTracksAndVertices"),
+        vertexSrc=cms.InputTag("unpackedTracksAndVertices"),
+        name=cms.string("Trk"),
+        vtxName=cms.string("Vtx"),
+        doc=cms.string("Heavy-ion tracks (unpacked from packedPFCandidates)"),
+        precision=cms.int32(-1),
+        trackPtMin=cms.double(0.01),
+        trackEtaMax=cms.double(4.0),
+        applyTrackSelections=cms.bool(False),
+    )
+    process.hiTrackTask = cms.Task(process.unpackedTracksAndVertices, process.trkTable)
+    _associate(process, process.hiTrackTask)
+    return process
+
+
 # ---------------------------------------------------------------------------
 #  Flavour entry points (referenced from autoNANO.py)
 # ---------------------------------------------------------------------------
@@ -265,6 +292,7 @@ def HINHADCustomNanoAOD(process):
     addZDCTable(process)
     addCentralityTable(process, addBin=True)  # full centrality incl. hiBin
     addHIJets(process)                        # akCs4PF + akCs4FlowPF HI jets (forest reco)
+    addHITracks(process)                      # unpacked reco::Tracks + vertices
     return process
 
 
