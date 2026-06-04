@@ -26,7 +26,7 @@ the forest.
 
 import FWCore.ParameterSet.Config as cms
 
-from PhysicsTools.NanoAOD.common_cff import Var, CandVars
+from PhysicsTools.NanoAOD.common_cff import Var, CandVars, ExtVar
 from Configuration.ProcessModifiers.run3_nanoAOD_HIN_cff import run3_nanoAOD_HIN
 
 # ---------------------------------------------------------------------------
@@ -118,19 +118,21 @@ zdcTable = cms.EDProducer(
 # ---------------------------------------------------------------------------
 #  Centrality / HF event activity (HiEvtAnalyzer content)
 # ---------------------------------------------------------------------------
+# "GO" = heavy-ion Global Observables (event-level): centrality bin + HF/ECAL/ZDC
+# sums and pixel/track multiplicities (the HiEvtAnalyzer event-level content).
 centralityTable = cms.EDProducer(
     "CentralityTableProducer",
     src=cms.InputTag("hiCentrality"),
     srcBin=cms.InputTag("centralityBin", "HFtowers"),
-    name=cms.string("Cent"),
-    doc=cms.string("Heavy-ion event activity: HF / ECAL / ZDC sums, multiplicities and centrality bin"),
+    name=cms.string("GO"),
+    doc=cms.string("Heavy-ion global observables: centrality bin, HF/ECAL/ZDC sums, multiplicities"),
     precision=cms.int32(10),
 )
 
 # UPC variant: HF / ZDC sums but no centrality bin.
 hfTable = centralityTable.clone(
     srcBin=cms.InputTag(""),
-    doc=cms.string("Heavy-ion event activity for UPC: HF / ECAL / ZDC sums (no centrality bin)"),
+    doc=cms.string("Heavy-ion global observables (UPC): HF / ECAL / ZDC sums (no centrality bin)"),
 )
 
 
@@ -193,6 +195,223 @@ def addCentralityTable(process, addBin=True):
     return process
 
 
+def addHIJets(process, labels=("4", "4Flow"), doBtagging=False, jetPtMin=15.0):
+    """Schedule the heavy-ion jet reconstruction (constituent-subtracted akCs PF jets
+    and flow-subtracted akCsFlow PF jets) from the forest setup, and tabulate the
+    resulting pat::Jets as NanoAOD FlatTables via HiInclusiveJetTableProducer.
+
+    Reuses HeavyIonsAnalysis.JetAnalysis.setupJets_PbPb_cff.candidateBtaggingMiniAOD
+    (the same reco the forest config runs). On a plain CMSSW area without the forest
+    package this is a no-op (so HINHAD still imports on the non-forest branch).
+    """
+    try:
+        from HeavyIonsAnalysis.JetAnalysis.setupJets_PbPb_cff import candidateBtaggingMiniAOD
+    except ImportError:
+        print("[custom_hin_cff] HeavyIonsAnalysis jet setup not found -> skipping HI jets. "
+              "Use the forest+nano branch (hin_nanoaod_hadronic_*) for HINHAD jets.")
+        return process
+
+    # data vs MC: is the MC nano sequence actually scheduled? (same check BTVNano uses)
+    isMC = (hasattr(process, "nanoSequenceMC") and getattr(process, "schedule", None) is not None
+            and process.schedule.contains(process.nanoSequenceMC))
+    jetCorrLevels = ["L2Relative", "L3Absolute"] if isMC else ["L2Relative", "L2L3Residual"]
+
+    # candidateBtaggingMiniAOD associates its reco tasks to process.forest; provide a stub
+    # path (added to the schedule) so the unscheduled reco modules actually run.
+    if not hasattr(process, "forest"):
+        process.forest = cms.Path()
+        if getattr(process, "schedule", None) is not None:
+            process.schedule.append(process.forest)
+
+    process.hiJetTableTask = cms.Task()
+    _associate(process, process.hiJetTableTask)
+
+    for label in labels:
+        candidateBtaggingMiniAOD(process, isMC=isMC, jetPtMin=jetPtMin,
+                                 jetCorrLevels=jetCorrLevels, doBtagging=doBtagging, labelR=label)
+        coll = "selectedUpdatedPatJetsAK" + label + "PFBtag"
+        tabname = "akCs" + label + "PFJet"  # akCs4PFJet, akCs4FlowPFJet
+        rParam = 0.4 if label == "0" else float(label.replace("Flow", "")) * 0.1
+        setattr(process, tabname + "Table", cms.EDProducer(
+            "HiInclusiveJetTableProducer",
+            jets=cms.InputTag(coll),
+            pfCandidates=cms.InputTag("packedPFCandidates"),
+            name=cms.string(tabname),
+            doc=cms.string("Heavy-ion inclusive jets (" + tabname + ")"),
+            precision=cms.int32(-1),
+            jetPtMin=cms.double(jetPtMin),
+            jetAbsEtaMax=cms.double(2.5),
+            rParam=cms.double(rParam),
+            hardPtMin=cms.double(4.0),
+            trackQuality=cms.string("highPurity"),
+            useQuality=cms.bool(True),
+            doHiJetID=cms.bool(True),
+            doWTARecluster=cms.bool(True),
+        ))
+        process.hiJetTableTask.add(getattr(process, tabname + "Table"))
+    return process
+
+
+def addHITracks(process):
+    """Unpack reco::Tracks + vertices from packedPFCandidates (forest
+    TrackAndVertexUnpacker) and tabulate them as the Trk + Vtx FlatTables.
+    No-op if the forest TrackAnalysis package is absent."""
+    try:
+        from HeavyIonsAnalysis.TrackAnalysis.unpackedTracksAndVertices_cfi import unpackedTracksAndVertices
+    except ImportError:
+        print("[custom_hin_cff] HeavyIonsAnalysis TrackAnalysis not found -> skipping HI tracks.")
+        return process
+    process.unpackedTracksAndVertices = unpackedTracksAndVertices.clone()
+    process.trkTable = cms.EDProducer(
+        "TrackTableProducer",
+        trackSrc=cms.InputTag("unpackedTracksAndVertices"),
+        vertexSrc=cms.InputTag("unpackedTracksAndVertices"),
+        name=cms.string("Trk"),
+        vtxName=cms.string("Vtx"),
+        doc=cms.string("Heavy-ion tracks (unpacked from packedPFCandidates)"),
+        precision=cms.int32(-1),
+        trackPtMin=cms.double(0.01),
+        trackEtaMax=cms.double(4.0),
+        applyTrackSelections=cms.bool(False),
+    )
+    process.hiTrackTask = cms.Task(process.unpackedTracksAndVertices, process.trkTable)
+    _associate(process, process.hiTrackTask)
+    return process
+
+
+def _removeNanoModules(process, names):
+    """Remove the named modules from every task/sequence/path/endpath so they are not
+    scheduled (and their tables are not written)."""
+    for n in names:
+        if not hasattr(process, n):
+            continue
+        mod = getattr(process, n)
+        for attr in ("tasks", "sequences", "paths", "endpaths"):
+            d = getattr(process, attr, None)
+            if d is None:
+                continue
+            try:
+                for cont in d.values():
+                    try:
+                        cont.remove(mod)
+                    except Exception:
+                        pass
+            except AttributeError:
+                pass
+    return process
+
+
+def tolerateMissingProducts(process):
+    """Safety net: let the job continue and still write output if some producer's input
+    product is absent (heavy-ion MiniAOD content varies). HI table producers consume
+    in-process products and are unaffected."""
+    if not hasattr(process, "options"):
+        process.options = cms.untracked.PSet()
+    process.options.TryToContinue = cms.untracked.vstring("ProductNotFound")
+    return process
+
+
+def stripPPonlyContent(process):
+    """Hadronic heavy-ion MiniAOD (e.g. HINPbPbWinter25) drops several pp-only
+    collections. Remove the standard NanoAOD tables that read the absent ones, and give
+    the cross-linked low-pT-electron chain an empty input so it runs harmlessly."""
+    # AK8 soft-drop subjets (slimmedJetsAK8PFPuppiSoftDropPacked:SubJets) and Puppi MET
+    # (slimmedMETsPuppi) are absent -> just drop those standalone tables.
+    _removeNanoModules(process, ["subJetTable", "subjetMCTable", "puppiMetTable", "rawPuppiMetTable"])
+    # low-pT electrons (slimmedLowPtElectrons) are absent but cross-linked via
+    # linkedObjects; feed the chain an always-empty stand-in collection.
+    if not hasattr(process, "slimmedLowPtElectrons"):
+        process.slimmedLowPtElectrons = cms.EDFilter(
+            "PATElectronSelector",
+            src=cms.InputTag("slimmedElectrons"),
+            cut=cms.string("pt < 0"),  # always empty
+        )
+        process.hiEmptyLowPtEleTask = cms.Task(process.slimmedLowPtElectrons)
+        _associate(process, process.hiEmptyLowPtEleTask)
+    return process
+
+
+def addHIMuons(process):
+    """Add an HI-specific extension to the standard NanoAOD Muon table: inner/global-track
+    detail and R03 track isolation (the forest MuonAnalyzer content not in standard nano).
+
+    Note: the forest also re-unpacks muons (unpackedMuons, recovering HI muons from
+    packed/lost tracks). Routing the standard muon chain through it requires giving
+    slimmedMuonsWithUserData's value-map embedder the right parentSrcs; left as a
+    follow-up. This extension uses the standard (slimmedMuons-based) Muon collection."""
+    # HI extension aligned with the standard Muon table
+    if hasattr(process, "muonTable"):
+        process.hiMuonExtTable = cms.EDProducer(
+            "SimplePATMuonFlatTableProducer",
+            src=process.muonTable.src,
+            cut=cms.string(""),
+            name=cms.string("Muon"),
+            doc=cms.string("HI muon extension (unpacked source; inner/global track, R03 iso)"),
+            singleton=cms.bool(False),
+            extension=cms.bool(True),
+            variables=cms.PSet(
+                isoTrkR03=Var("isolationR03().sumPt", float, doc="sum track pt in R03 cone", precision=10),
+                innerPt=Var("?innerTrack.isNonnull()?innerTrack().pt():-1", float, doc="inner-track pt", precision=-1),
+                innerPtErr=Var("?innerTrack.isNonnull()?innerTrack().ptError():-1", float, doc="inner-track pt error", precision=10),
+                innerEta=Var("?innerTrack.isNonnull()?innerTrack().eta():-99", float, doc="inner-track eta", precision=12),
+                innerNTrkHits=Var("?innerTrack.isNonnull()?innerTrack().hitPattern().numberOfValidTrackerHits():-1", int, doc="inner-track valid tracker hits"),
+                innerNPixHits=Var("?innerTrack.isNonnull()?innerTrack().hitPattern().numberOfValidPixelHits():-1", int, doc="inner-track valid pixel hits"),
+                innerHighPurity=Var("?innerTrack.isNonnull()?innerTrack().quality('highPurity'):0", bool, doc="inner-track high purity"),
+                globalPt=Var("?globalTrack.isNonnull()?globalTrack().pt():-1", float, doc="global-track pt", precision=-1),
+                globalNormChi2=Var("?globalTrack.isNonnull()?globalTrack().normalizedChi2():-1", float, doc="global-track norm chi2", precision=10),
+                globalNMuonHits=Var("?globalTrack.isNonnull()?globalTrack().hitPattern().numberOfValidMuonHits():-1", int, doc="global-track valid muon hits"),
+            ),
+        )
+        process.hiMuonExtTask = cms.Task(process.hiMuonExtTable)
+        _associate(process, process.hiMuonExtTask)
+    return process
+
+
+def addHIEGM(process):
+    """Add HI custom-cone PF isolation (charged/photon/neutral, dR 0.3 & 0.4) as
+    extension columns to the standard Electron and Photon tables, ported from the
+    ggHiNtuplizer pfIsoCalculator. The standard nano e/gamma tables already cover the
+    rest of the ggHiNtuplizer content (kinematics, SC, shower shapes, IDs, std iso)."""
+    specs = [
+        ("electron", "electronTable", "hiElectronIso", "SimplePATElectronFlatTableProducer"),
+        ("photon", "photonTable", "hiPhotonIso", "SimplePATPhotonFlatTableProducer"),
+    ]
+    for obj, table, isoMod, prod in specs:
+        if not hasattr(process, table):
+            continue
+        src = getattr(process, table).src
+        setattr(process, isoMod, cms.EDProducer(
+            "HIEGMIsoProducer",
+            src=src,
+            pfCandidates=cms.InputTag("packedPFCandidates"),
+            vertices=cms.InputTag("offlineSlimmedPrimaryVertices"),
+            dzMax=cms.double(0.2),
+            dxyMax=cms.double(0.1),
+        ))
+        setattr(process, isoMod + "ExtTable", cms.EDProducer(
+            prod,
+            src=src,
+            cut=cms.string(""),
+            name=getattr(process, table).name,
+            doc=cms.string("HI cone isolation"),
+            singleton=cms.bool(False),
+            extension=cms.bool(True),
+            variables=cms.PSet(),
+            externalVariables=cms.PSet(
+                hiPFChIso03=ExtVar(cms.InputTag(isoMod, "chIso03"), float, doc="HI charged-hadron iso, dR<0.3", precision=10),
+                hiPFChIso04=ExtVar(cms.InputTag(isoMod, "chIso04"), float, doc="HI charged-hadron iso, dR<0.4", precision=10),
+                hiPFPhoIso03=ExtVar(cms.InputTag(isoMod, "phoIso03"), float, doc="HI photon iso, dR<0.3", precision=10),
+                hiPFPhoIso04=ExtVar(cms.InputTag(isoMod, "phoIso04"), float, doc="HI photon iso, dR<0.4", precision=10),
+                hiPFNeuIso03=ExtVar(cms.InputTag(isoMod, "nhIso03"), float, doc="HI neutral-hadron iso, dR<0.3", precision=10),
+                hiPFNeuIso04=ExtVar(cms.InputTag(isoMod, "nhIso04"), float, doc="HI neutral-hadron iso, dR<0.4", precision=10),
+            ),
+        ))
+        t = cms.Task(getattr(process, isoMod), getattr(process, isoMod + "ExtTable"))
+        setattr(process, obj + "HIIsoTask", t)
+        _associate(process, t)
+    return process
+
+
 # ---------------------------------------------------------------------------
 #  Flavour entry points (referenced from autoNANO.py)
 # ---------------------------------------------------------------------------
@@ -200,6 +419,7 @@ def HINUPCCustomNanoAOD(process):
     addHIPFCands(process)
     addZDCTable(process)
     addCentralityTable(process, addBin=False)  # HF info, no centrality bin (UPC)
+    tolerateMissingProducts(process)
     return process
 
 
@@ -207,6 +427,12 @@ def HINHADCustomNanoAOD(process):
     addHIPFCands(process)
     addZDCTable(process)
     addCentralityTable(process, addBin=True)  # full centrality incl. hiBin
+    addHIJets(process)                        # akCs4PF + akCs4FlowPF HI jets (forest reco)
+    addHITracks(process)                      # unpacked reco::Tracks + vertices
+    addHIMuons(process)                       # unpacked muons -> Muon table + HI extension
+    addHIEGM(process)                         # HI cone isolation on Electron/Photon tables
+    stripPPonlyContent(process)               # drop pp-only tables absent from HI MiniAOD
+    tolerateMissingProducts(process)
     return process
 
 

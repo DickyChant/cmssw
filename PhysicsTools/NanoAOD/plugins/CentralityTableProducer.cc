@@ -113,6 +113,25 @@ void CentralityTableProducer::produce(edm::Event& iEvent, const edm::EventSetup&
   addI("hiNpixelTracks", &reco::Centrality::NpixelTracks, "Number of pixel tracks");
   addI("hiNtracks", &reco::Centrality::Ntracks, "Number of tracks");
 
+  // Additional event-global variables (HiEvtAnalyzer content)
+  addF("hiHFECutPlus", &reco::Centrality::EtHFtowerSumECutPlus, "Sum Et HF+ towers (E cut)");
+  addF("hiHFECutMinus", &reco::Centrality::EtHFtowerSumECutMinus, "Sum Et HF- towers (E cut)");
+  addF("hiHFtruncated", &reco::Centrality::EtHFtruncated, "Sum Et HF towers (truncated)");
+  addF("hiHFtruncatedPlus", &reco::Centrality::EtHFtruncatedPlus, "Sum Et HF+ towers (truncated)");
+  addF("hiHFtruncatedMinus", &reco::Centrality::EtHFtruncatedMinus, "Sum Et HF- towers (truncated)");
+  addF("hiEEplus", &reco::Centrality::EtEESumPlus, "Sum Et EE+");
+  addF("hiEEminus", &reco::Centrality::EtEESumMinus, "Sum Et EE-");
+  addF("hiPFhfSum", &reco::Centrality::EtPFhfSum, "Sum Et of PF candidates in HF");
+  addF("hiPFhfSumPlus", &reco::Centrality::EtPFhfSumPlus, "Sum Et of PF candidates in HF+");
+  addF("hiPFhfSumMinus", &reco::Centrality::EtPFhfSumMinus, "Sum Et of PF candidates in HF-");
+  addI("hiNpixPlus", &reco::Centrality::multiplicityPixelPlus, "Number of pixel hits (+side)");
+  addI("hiNpixMinus", &reco::Centrality::multiplicityPixelMinus, "Number of pixel hits (-side)");
+  addI("hiNpixelTracksPlus", &reco::Centrality::NpixelTracksPlus, "Number of pixel tracks (+side)");
+  addI("hiNpixelTracksMinus", &reco::Centrality::NpixelTracksMinus, "Number of pixel tracks (-side)");
+  addI("hiNtracksPtCut", &reco::Centrality::NtracksPtCut, "Number of tracks (pt cut)");
+  addI("hiNtracksEtaCut", &reco::Centrality::NtracksEtaCut, "Number of tracks (eta cut)");
+  addI("hiNtracksEtaPtCut", &reco::Centrality::NtracksEtaPtCut, "Number of tracks (eta+pt cut)");
+
   iEvent.put(std::move(out));
 }
 
