@@ -277,6 +277,58 @@ def addHITracks(process):
     return process
 
 
+def _removeNanoModules(process, names):
+    """Remove the named modules from every task/sequence/path/endpath so they are not
+    scheduled (and their tables are not written)."""
+    for n in names:
+        if not hasattr(process, n):
+            continue
+        mod = getattr(process, n)
+        for attr in ("tasks", "sequences", "paths", "endpaths"):
+            d = getattr(process, attr, None)
+            if d is None:
+                continue
+            try:
+                for cont in d.values():
+                    try:
+                        cont.remove(mod)
+                    except Exception:
+                        pass
+            except AttributeError:
+                pass
+    return process
+
+
+def tolerateMissingProducts(process):
+    """Safety net: let the job continue and still write output if some producer's input
+    product is absent (heavy-ion MiniAOD content varies). HI table producers consume
+    in-process products and are unaffected."""
+    if not hasattr(process, "options"):
+        process.options = cms.untracked.PSet()
+    process.options.TryToContinue = cms.untracked.vstring("ProductNotFound")
+    return process
+
+
+def stripPPonlyContent(process):
+    """Hadronic heavy-ion MiniAOD (e.g. HINPbPbWinter25) drops several pp-only
+    collections. Remove the standard NanoAOD tables that read the absent ones, and give
+    the cross-linked low-pT-electron chain an empty input so it runs harmlessly."""
+    # AK8 soft-drop subjets (slimmedJetsAK8PFPuppiSoftDropPacked:SubJets) and Puppi MET
+    # (slimmedMETsPuppi) are absent -> just drop those standalone tables.
+    _removeNanoModules(process, ["subJetTable", "subjetMCTable", "puppiMetTable", "rawPuppiMetTable"])
+    # low-pT electrons (slimmedLowPtElectrons) are absent but cross-linked via
+    # linkedObjects; feed the chain an always-empty stand-in collection.
+    if not hasattr(process, "slimmedLowPtElectrons"):
+        process.slimmedLowPtElectrons = cms.EDFilter(
+            "PATElectronSelector",
+            src=cms.InputTag("slimmedElectrons"),
+            cut=cms.string("pt < 0"),  # always empty
+        )
+        process.hiEmptyLowPtEleTask = cms.Task(process.slimmedLowPtElectrons)
+        _associate(process, process.hiEmptyLowPtEleTask)
+    return process
+
+
 # ---------------------------------------------------------------------------
 #  Flavour entry points (referenced from autoNANO.py)
 # ---------------------------------------------------------------------------
@@ -284,6 +336,7 @@ def HINUPCCustomNanoAOD(process):
     addHIPFCands(process)
     addZDCTable(process)
     addCentralityTable(process, addBin=False)  # HF info, no centrality bin (UPC)
+    tolerateMissingProducts(process)
     return process
 
 
@@ -293,6 +346,8 @@ def HINHADCustomNanoAOD(process):
     addCentralityTable(process, addBin=True)  # full centrality incl. hiBin
     addHIJets(process)                        # akCs4PF + akCs4FlowPF HI jets (forest reco)
     addHITracks(process)                      # unpacked reco::Tracks + vertices
+    stripPPonlyContent(process)               # drop pp-only tables absent from HI MiniAOD
+    tolerateMissingProducts(process)
     return process
 
 
