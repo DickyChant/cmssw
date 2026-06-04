@@ -329,6 +329,42 @@ def stripPPonlyContent(process):
     return process
 
 
+def addHIMuons(process):
+    """Add an HI-specific extension to the standard NanoAOD Muon table: inner/global-track
+    detail and R03 track isolation (the forest MuonAnalyzer content not in standard nano).
+
+    Note: the forest also re-unpacks muons (unpackedMuons, recovering HI muons from
+    packed/lost tracks). Routing the standard muon chain through it requires giving
+    slimmedMuonsWithUserData's value-map embedder the right parentSrcs; left as a
+    follow-up. This extension uses the standard (slimmedMuons-based) Muon collection."""
+    # HI extension aligned with the standard Muon table
+    if hasattr(process, "muonTable"):
+        process.hiMuonExtTable = cms.EDProducer(
+            "SimplePATMuonFlatTableProducer",
+            src=process.muonTable.src,
+            cut=cms.string(""),
+            name=cms.string("Muon"),
+            doc=cms.string("HI muon extension (unpacked source; inner/global track, R03 iso)"),
+            singleton=cms.bool(False),
+            extension=cms.bool(True),
+            variables=cms.PSet(
+                isoTrkR03=Var("isolationR03().sumPt", float, doc="sum track pt in R03 cone", precision=10),
+                innerPt=Var("?innerTrack.isNonnull()?innerTrack().pt():-1", float, doc="inner-track pt", precision=-1),
+                innerPtErr=Var("?innerTrack.isNonnull()?innerTrack().ptError():-1", float, doc="inner-track pt error", precision=10),
+                innerEta=Var("?innerTrack.isNonnull()?innerTrack().eta():-99", float, doc="inner-track eta", precision=12),
+                innerNTrkHits=Var("?innerTrack.isNonnull()?innerTrack().hitPattern().numberOfValidTrackerHits():-1", int, doc="inner-track valid tracker hits"),
+                innerNPixHits=Var("?innerTrack.isNonnull()?innerTrack().hitPattern().numberOfValidPixelHits():-1", int, doc="inner-track valid pixel hits"),
+                innerHighPurity=Var("?innerTrack.isNonnull()?innerTrack().quality('highPurity'):0", bool, doc="inner-track high purity"),
+                globalPt=Var("?globalTrack.isNonnull()?globalTrack().pt():-1", float, doc="global-track pt", precision=-1),
+                globalNormChi2=Var("?globalTrack.isNonnull()?globalTrack().normalizedChi2():-1", float, doc="global-track norm chi2", precision=10),
+                globalNMuonHits=Var("?globalTrack.isNonnull()?globalTrack().hitPattern().numberOfValidMuonHits():-1", int, doc="global-track valid muon hits"),
+            ),
+        )
+        process.hiMuonExtTask = cms.Task(process.hiMuonExtTable)
+        _associate(process, process.hiMuonExtTask)
+    return process
+
+
 # ---------------------------------------------------------------------------
 #  Flavour entry points (referenced from autoNANO.py)
 # ---------------------------------------------------------------------------
@@ -346,6 +382,7 @@ def HINHADCustomNanoAOD(process):
     addCentralityTable(process, addBin=True)  # full centrality incl. hiBin
     addHIJets(process)                        # akCs4PF + akCs4FlowPF HI jets (forest reco)
     addHITracks(process)                      # unpacked reco::Tracks + vertices
+    addHIMuons(process)                       # unpacked muons -> Muon table + HI extension
     stripPPonlyContent(process)               # drop pp-only tables absent from HI MiniAOD
     tolerateMissingProducts(process)
     return process
