@@ -26,7 +26,7 @@ the forest.
 
 import FWCore.ParameterSet.Config as cms
 
-from PhysicsTools.NanoAOD.common_cff import Var, CandVars
+from PhysicsTools.NanoAOD.common_cff import Var, CandVars, ExtVar
 from Configuration.ProcessModifiers.run3_nanoAOD_HIN_cff import run3_nanoAOD_HIN
 
 # ---------------------------------------------------------------------------
@@ -365,6 +365,51 @@ def addHIMuons(process):
     return process
 
 
+def addHIEGM(process):
+    """Add HI custom-cone PF isolation (charged/photon/neutral, dR 0.3 & 0.4) as
+    extension columns to the standard Electron and Photon tables, ported from the
+    ggHiNtuplizer pfIsoCalculator. The standard nano e/gamma tables already cover the
+    rest of the ggHiNtuplizer content (kinematics, SC, shower shapes, IDs, std iso)."""
+    specs = [
+        ("electron", "electronTable", "hiElectronIso", "SimplePATElectronFlatTableProducer"),
+        ("photon", "photonTable", "hiPhotonIso", "SimplePATPhotonFlatTableProducer"),
+    ]
+    for obj, table, isoMod, prod in specs:
+        if not hasattr(process, table):
+            continue
+        src = getattr(process, table).src
+        setattr(process, isoMod, cms.EDProducer(
+            "HIEGMIsoProducer",
+            src=src,
+            pfCandidates=cms.InputTag("packedPFCandidates"),
+            vertices=cms.InputTag("offlineSlimmedPrimaryVertices"),
+            dzMax=cms.double(0.2),
+            dxyMax=cms.double(0.1),
+        ))
+        setattr(process, isoMod + "ExtTable", cms.EDProducer(
+            prod,
+            src=src,
+            cut=cms.string(""),
+            name=getattr(process, table).name,
+            doc=cms.string("HI cone isolation"),
+            singleton=cms.bool(False),
+            extension=cms.bool(True),
+            variables=cms.PSet(),
+            externalVariables=cms.PSet(
+                hiPFChIso03=ExtVar(cms.InputTag(isoMod, "chIso03"), float, doc="HI charged-hadron iso, dR<0.3", precision=10),
+                hiPFChIso04=ExtVar(cms.InputTag(isoMod, "chIso04"), float, doc="HI charged-hadron iso, dR<0.4", precision=10),
+                hiPFPhoIso03=ExtVar(cms.InputTag(isoMod, "phoIso03"), float, doc="HI photon iso, dR<0.3", precision=10),
+                hiPFPhoIso04=ExtVar(cms.InputTag(isoMod, "phoIso04"), float, doc="HI photon iso, dR<0.4", precision=10),
+                hiPFNeuIso03=ExtVar(cms.InputTag(isoMod, "nhIso03"), float, doc="HI neutral-hadron iso, dR<0.3", precision=10),
+                hiPFNeuIso04=ExtVar(cms.InputTag(isoMod, "nhIso04"), float, doc="HI neutral-hadron iso, dR<0.4", precision=10),
+            ),
+        ))
+        t = cms.Task(getattr(process, isoMod), getattr(process, isoMod + "ExtTable"))
+        setattr(process, obj + "HIIsoTask", t)
+        _associate(process, t)
+    return process
+
+
 # ---------------------------------------------------------------------------
 #  Flavour entry points (referenced from autoNANO.py)
 # ---------------------------------------------------------------------------
@@ -383,6 +428,7 @@ def HINHADCustomNanoAOD(process):
     addHIJets(process)                        # akCs4PF + akCs4FlowPF HI jets (forest reco)
     addHITracks(process)                      # unpacked reco::Tracks + vertices
     addHIMuons(process)                       # unpacked muons -> Muon table + HI extension
+    addHIEGM(process)                         # HI cone isolation on Electron/Photon tables
     stripPPonlyContent(process)               # drop pp-only tables absent from HI MiniAOD
     tolerateMissingProducts(process)
     return process
