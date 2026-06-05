@@ -38,6 +38,7 @@
 #include "DataFormats/Math/interface/deltaR.h"
 #include "DataFormats/NanoAOD/interface/FlatTable.h"
 #include "DataFormats/ParticleFlowCandidate/interface/PFCandidate.h"
+#include "DataFormats/JetReco/interface/GenJet.h"
 #include "DataFormats/PatCandidates/interface/Jet.h"
 #include "DataFormats/PatCandidates/interface/PackedCandidate.h"
 #include "DataFormats/TrackReco/interface/Track.h"
@@ -68,6 +69,7 @@ private:
   const bool useQuality_;
   const bool doHiJetID_;
   const bool doWTARecluster_;
+  const bool storeGenMatch_;
   const fastjet::JetDefinition wtaJetDef_;
 };
 
@@ -86,6 +88,7 @@ HiInclusiveJetTableProducer::HiInclusiveJetTableProducer(const edm::ParameterSet
       useQuality_(iConfig.getParameter<bool>("useQuality")),
       doHiJetID_(iConfig.getParameter<bool>("doHiJetID")),
       doWTARecluster_(iConfig.getParameter<bool>("doWTARecluster")),
+      storeGenMatch_(iConfig.getParameter<bool>("storeGenMatch")),
       wtaJetDef_(fastjet::antikt_algorithm, 2, fastjet::WTA_pt_scheme) {
   produces<nanoaod::FlatTable>();
 }
@@ -106,6 +109,9 @@ void HiInclusiveJetTableProducer::produce(edm::Event& iEvent, const edm::EventSe
   std::vector<int> trackN, trackHardN, chargedN, chargedHardN, photonN, photonHardN, neutralN, eN, muN;
   // WTA axis
   std::vector<float> wtaEta, wtaPhi;
+  // matched gen jet (MC)
+  std::vector<float> refpt, refeta, refphi, refm;
+  std::vector<int> refPartonFlavor, refHadronFlavor;
 
   const auto trackQual = reco::TrackBase::qualityByName(trackQuality_);
   reco::PFCandidate pdgConverter;  // for translatePdgIdToType
@@ -269,6 +275,16 @@ void HiInclusiveJetTableProducer::produce(edm::Event& iEvent, const edm::EventSe
     }
     wtaEta.push_back(weta);
     wtaPhi.push_back(wphi);
+
+    if (storeGenMatch_) {
+      const reco::GenJet* gj = jet.genJet();
+      refpt.push_back(gj ? gj->pt() : -999.f);
+      refeta.push_back(gj ? gj->eta() : -999.f);
+      refphi.push_back(gj ? gj->phi() : -999.f);
+      refm.push_back(gj ? gj->mass() : -999.f);
+      refPartonFlavor.push_back(jet.partonFlavour());
+      refHadronFlavor.push_back(jet.hadronFlavour());
+    }
   }
 
   auto out = std::make_unique<nanoaod::FlatTable>(pt.size(), name_, /*singleton=*/false, /*extension=*/false);
@@ -320,6 +336,14 @@ void HiInclusiveJetTableProducer::produce(edm::Event& iEvent, const edm::EventSe
     out->addColumn<float>("WTAeta", wtaEta, "Winner-Take-All reclustered jet eta", p);
     out->addColumn<float>("WTAphi", wtaPhi, "Winner-Take-All reclustered jet phi", p);
   }
+  if (storeGenMatch_) {
+    out->addColumn<float>("refpt", refpt, "matched gen-jet pt (-999 if unmatched)", p);
+    out->addColumn<float>("refeta", refeta, "matched gen-jet eta", p);
+    out->addColumn<float>("refphi", refphi, "matched gen-jet phi", p);
+    out->addColumn<float>("refm", refm, "matched gen-jet mass", p);
+    out->addColumn<int>("refparton_flavor", refPartonFlavor, "jet parton flavour");
+    out->addColumn<int>("refparton_flavorForB", refHadronFlavor, "jet hadron flavour (for b-tagging)");
+  }
   iEvent.put(std::move(out));
 }
 
@@ -338,6 +362,7 @@ void HiInclusiveJetTableProducer::fillDescriptions(edm::ConfigurationDescription
   desc.add<bool>("useQuality", true);
   desc.add<bool>("doHiJetID", true);
   desc.add<bool>("doWTARecluster", true);
+  desc.add<bool>("storeGenMatch", false);
   descriptions.addWithDefaultLabel(desc);
 }
 

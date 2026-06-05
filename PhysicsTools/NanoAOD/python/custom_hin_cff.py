@@ -247,6 +247,7 @@ def addHIJets(process, labels=("4", "4Flow"), doBtagging=False, jetPtMin=15.0):
             useQuality=cms.bool(True),
             doHiJetID=cms.bool(True),
             doWTARecluster=cms.bool(True),
+            storeGenMatch=cms.bool(isMC),  # matched gen-jet ref* branches (MC only)
         ))
         process.hiJetTableTask.add(getattr(process, tabname + "Table"))
     return process
