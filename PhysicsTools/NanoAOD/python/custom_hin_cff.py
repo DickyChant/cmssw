@@ -412,6 +412,22 @@ def addHIEGM(process):
     return process
 
 
+def addHIEventFilters(process):
+    """HI event-selection flags + HF-coincidence tower counts (top-level Flag_* /
+    hiHFnTower*), computed directly from packedPFCandidates + primary vertices. No
+    forest dependency, so it works on both the plain and forest branches."""
+    process.hiEventFilterTable = cms.EDProducer(
+        "HIEventFilterTableProducer",
+        pfCandidates=cms.InputTag("packedPFCandidates"),
+        vertices=cms.InputTag("offlineSlimmedPrimaryVertices"),
+        pvMaxZ=cms.double(25.0),
+        pvMaxRho=cms.double(2.0),
+    )
+    process.hiEventFilterTask = cms.Task(process.hiEventFilterTable)
+    _associate(process, process.hiEventFilterTask)
+    return process
+
+
 # ---------------------------------------------------------------------------
 #  Flavour entry points (referenced from autoNANO.py)
 # ---------------------------------------------------------------------------
@@ -419,6 +435,7 @@ def HINUPCCustomNanoAOD(process):
     addHIPFCands(process)
     addZDCTable(process)
     addCentralityTable(process, addBin=False)  # HF info, no centrality bin (UPC)
+    addHIEventFilters(process)
     tolerateMissingProducts(process)
     return process
 
@@ -431,6 +448,7 @@ def HINHADCustomNanoAOD(process):
     addHITracks(process)                      # unpacked reco::Tracks + vertices
     addHIMuons(process)                       # unpacked muons -> Muon table + HI extension
     addHIEGM(process)                         # HI cone isolation on Electron/Photon tables
+    addHIEventFilters(process)                # HI event-selection Flag_* + HF tower counts
     stripPPonlyContent(process)               # drop pp-only tables absent from HI MiniAOD
     tolerateMissingProducts(process)
     return process
