@@ -83,12 +83,14 @@ void HIEventFilterTableProducer::produce(edm::Event& iEvent, const edm::EventSet
   for (size_t t = 0; t < kThresh.size(); ++t)
     nMin[t] = std::min(nPlus[t], nMinus[t]);
 
-  // primary-vertex filter on the leading vertex
-  const auto& vtx = iEvent.get(vtxToken_);
+  // primary-vertex filter: pass if ANY vertex satisfies the cut (matches the forest
+  // VertexSelector with filter=True), not only the leading one.
   bool pvPass = false;
-  if (!vtx.empty()) {
-    const auto& v = vtx.front();
-    pvPass = (!v.isFake() && std::abs(v.z()) <= pvMaxZ_ && v.position().Rho() <= pvMaxRho_);
+  for (const auto& v : iEvent.get(vtxToken_)) {
+    if (!v.isFake() && std::abs(v.z()) <= pvMaxZ_ && v.position().Rho() <= pvMaxRho_) {
+      pvPass = true;
+      break;
+    }
   }
 
   auto out = std::make_unique<nanoaod::FlatTable>(1, "", /*singleton=*/true, /*extension=*/false);
@@ -101,6 +103,7 @@ void HIEventFilterTableProducer::produce(edm::Event& iEvent, const edm::EventSet
   out->addColumnValue<bool>("Flag_phfCoincFilter1Th4", nMin[2] >= 1, "PF HF coincidence: >=1 tower E>=4 GeV each side");
   out->addColumnValue<bool>("Flag_phfCoincFilter2Th4", nMin[2] >= 2, "PF HF coincidence: >=2 towers E>=4 GeV each side");
   out->addColumnValue<bool>("Flag_phfCoincFilter3Th4", nMin[2] >= 3, "PF HF coincidence: >=3 towers E>=4 GeV each side");
+  out->addColumnValue<bool>("Flag_phfCoincFilter4Th4", nMin[2] >= 4, "PF HF coincidence: >=4 towers E>=4 GeV each side");
   iEvent.put(std::move(out));
 }
 
