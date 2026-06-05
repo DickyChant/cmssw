@@ -317,7 +317,20 @@ def stripPPonlyContent(process):
     the cross-linked low-pT-electron chain an empty input so it runs harmlessly."""
     # AK8 soft-drop subjets (slimmedJetsAK8PFPuppiSoftDropPacked:SubJets) and Puppi MET
     # (slimmedMETsPuppi) are absent -> just drop those standalone tables.
-    _removeNanoModules(process, ["subJetTable", "subjetMCTable", "puppiMetTable", "rawPuppiMetTable"])
+    _removeNanoModules(process, ["subJetTable", "subjetMCTable", "puppiMetTable", "rawPuppiMetTable",
+                                 # gen content absent in HI MiniAOD (MC): AK8 soft-drop subjets and the
+                                 # gen-jet flavour chain (slimmedGenJetsFlavourInfos not stored).
+                                 "genSubJetAK8Table", "genJetFlavourTable", "genJetFlavourAssociation",
+                                 "matchGenBHadron", "matchGenCHadron", "categorizeGenTtbar", "ttbarCategoryTable"])
+    # GenPartIsoProducer (genIso) segfaults on the high-multiplicity HI MC gen content;
+    # drop it and the GenPart external column that reads it (MC only -> guarded by hasattr).
+    if hasattr(process, "genIso"):
+        if hasattr(process, "genParticleTable") and hasattr(process.genParticleTable, "externalVariables"):
+            ev = process.genParticleTable.externalVariables
+            for vn in list(ev.parameterNames_()):
+                if "genIso" in getattr(ev, vn).dumpPython():
+                    delattr(ev, vn)
+        _removeNanoModules(process, ["genIso"])
     # low-pT electrons (slimmedLowPtElectrons) are absent but cross-linked via
     # linkedObjects; feed the chain an always-empty stand-in collection.
     if not hasattr(process, "slimmedLowPtElectrons"):
