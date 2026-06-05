@@ -26,7 +26,7 @@ the forest.
 
 import FWCore.ParameterSet.Config as cms
 
-from PhysicsTools.NanoAOD.common_cff import Var, CandVars, ExtVar
+from PhysicsTools.NanoAOD.common_cff import Var, CandVars, ExtVar, P4Vars
 from Configuration.ProcessModifiers.run3_nanoAOD_HIN_cff import run3_nanoAOD_HIN
 
 # ---------------------------------------------------------------------------
@@ -412,6 +412,28 @@ def addHIEGM(process):
     return process
 
 
+def addHICaloJets(process):
+    """Tabulate the (slimmed) calorimeter jets as a CaloJet table. These are the
+    standard slimmedCaloJets present in the HI MiniAOD; the HI pileup-subtracted
+    akPu4Calo collection needs CaloTowers (not in MiniAOD) and is not reproduced."""
+    # slimmedCaloJets is a vector<reco::CaloJet>, so use the candidate-based table
+    # (kinematics). Calo-specific fractions (emEF/n90) would need a reco::CaloJet
+    # SimpleFlatTableProducer typedef -> left as a follow-up.
+    process.hiCaloJetTable = cms.EDProducer(
+        "SimpleCandidateFlatTableProducer",
+        src=cms.InputTag("slimmedCaloJets"),
+        cut=cms.string("pt > 15"),
+        name=cms.string("CaloJet"),
+        doc=cms.string("slimmed calorimeter jets (reco::CaloJet, kinematics; pt>15)"),
+        singleton=cms.bool(False),
+        extension=cms.bool(False),
+        variables=cms.PSet(P4Vars),
+    )
+    process.hiCaloJetTask = cms.Task(process.hiCaloJetTable)
+    _associate(process, process.hiCaloJetTask)
+    return process
+
+
 def addHIEventFilters(process):
     """HI event-selection flags + HF-coincidence tower counts (top-level Flag_* /
     hiHFnTower*), computed directly from packedPFCandidates + primary vertices. No
@@ -448,6 +470,7 @@ def HINHADCustomNanoAOD(process):
     addHITracks(process)                      # unpacked reco::Tracks + vertices
     addHIMuons(process)                       # unpacked muons -> Muon table + HI extension
     addHIEGM(process)                         # HI cone isolation on Electron/Photon tables
+    addHICaloJets(process)                    # slimmed calo jets -> CaloJet table
     addHIEventFilters(process)                # HI event-selection Flag_* + HF tower counts
     stripPPonlyContent(process)               # drop pp-only tables absent from HI MiniAOD
     tolerateMissingProducts(process)
