@@ -319,10 +319,25 @@ def stripPPonlyContent(process):
     # AK8 soft-drop subjets (slimmedJetsAK8PFPuppiSoftDropPacked:SubJets) and Puppi MET
     # (slimmedMETsPuppi) are absent -> just drop those standalone tables.
     _removeNanoModules(process, ["subJetTable", "subjetMCTable", "puppiMetTable", "rawPuppiMetTable",
-                                 # gen content absent in HI MiniAOD (MC): AK8 soft-drop subjets and the
-                                 # gen-jet flavour chain (slimmedGenJetsFlavourInfos not stored).
-                                 "genSubJetAK8Table", "genJetFlavourTable", "genJetFlavourAssociation",
-                                 "matchGenBHadron", "matchGenCHadron", "categorizeGenTtbar", "ttbarCategoryTable"])
+                                 "genSubJetAK8Table"])  # AK8 gen soft-drop subjets absent in HI MiniAOD (MC)
+    # HI MiniAOD doesn't store slimmedGenJetsFlavourInfos. Compute the gen-jet flavour
+    # in-process via genJetFlavourAssociation (JetFlavourClustering over slimmedGenJets,
+    # already scheduled), as the AK8 gen-flavour table already does, instead of reading
+    # the absent pre-stored collection. This keeps GenJet_partonFlavour/hadronFlavour and
+    # the ttbar categorization (matchGenB/CHadron -> categorizeGenTtbar -> ttbarCategoryTable).
+    if hasattr(process, "genJetFlavourAssociation"):
+        # ensure the in-process flavour clustering (+ its parton selector) actually runs;
+        # it was unconsumed/unscheduled while the default read the pre-stored collection.
+        t = cms.Task(process.genJetFlavourAssociation)
+        if hasattr(process, "patJetPartonsNano"):
+            t.add(process.patJetPartonsNano)
+        process.hiGenJetFlavourTask = t
+        _associate(process, process.hiGenJetFlavourTask)
+        if hasattr(process, "genJetFlavourTable"):
+            process.genJetFlavourTable.jetFlavourInfos = cms.InputTag("genJetFlavourAssociation")
+        for m in ("matchGenBHadron", "matchGenCHadron"):
+            if hasattr(process, m) and hasattr(getattr(process, m), "jetFlavourInfos"):
+                getattr(process, m).jetFlavourInfos = cms.InputTag("genJetFlavourAssociation")
     # GenPartIsoProducer (genIso) segfaults on the high-multiplicity HI MC gen content;
     # drop it and the GenPart external column that reads it (MC only -> guarded by hasattr).
     if hasattr(process, "genIso"):
