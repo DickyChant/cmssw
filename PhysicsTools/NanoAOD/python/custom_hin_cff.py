@@ -444,22 +444,48 @@ def addHIEGM(process):
 def addHICaloJets(process):
     """Tabulate the (slimmed) calorimeter jets as a CaloJet table. These are the
     standard slimmedCaloJets present in the HI MiniAOD; the HI pileup-subtracted
-    akPu4Calo collection needs CaloTowers (not in MiniAOD) and is not reproduced."""
-    # slimmedCaloJets is a vector<reco::CaloJet>, so use the candidate-based table
-    # (kinematics). Calo-specific fractions (emEF/n90) would need a reco::CaloJet
-    # SimpleFlatTableProducer typedef -> left as a follow-up.
+    akPu4Calo collection needs CaloTowers (not in MiniAOD) and is not reproduced.
+
+    Reproduces the HiForest HiCaloJetAnalyzer (akPu4Calo) content on MiniAOD. The forest
+    reads slimmedCaloJets (the genuine pileup-subtracted akPu4Calo needs CaloTowers, which
+    are absent from MiniAOD) and -- with doHiJetID -- builds a PF/track in-cone composition
+    by looping packedPFCandidates within dR<0.4 of the calo-jet axis (NOT from calo towers).
+    HICaloJetTableProducer reproduces exactly that, plus the two calo fractions emEF/hadEF
+    that survive slimming (m_specific). The tower-level handles (maxEInEmTowers, towersArea,
+    n90/n60, sub-detector energies) read back as 0 on slimmedCaloJets and are not written."""
     process.hiCaloJetTable = cms.EDProducer(
-        "SimpleCandidateFlatTableProducer",
-        src=cms.InputTag("slimmedCaloJets"),
-        cut=cms.string("pt > 15"),
+        "HICaloJetTableProducer",
+        jets=cms.InputTag("slimmedCaloJets"),
+        pfCandidates=cms.InputTag("packedPFCandidates"),
         name=cms.string("CaloJet"),
-        doc=cms.string("slimmed calorimeter jets (reco::CaloJet, kinematics; pt>15)"),
-        singleton=cms.bool(False),
-        extension=cms.bool(False),
-        variables=cms.PSet(P4Vars),
+        doc=cms.string("slimmed calorimeter jets (reco::CaloJet; pt>15) + HiForest-style PF in-cone ID"),
+        jetPtMin=cms.double(15.0),
+        jetAbsEtaMax=cms.double(5.1),
+        rParam=cms.double(0.4),
+        hardPtMin=cms.double(4.0),
+        useQuality=cms.bool(True),
+        trackQuality=cms.string("highPurity"),
     )
     process.hiCaloJetTask = cms.Task(process.hiCaloJetTable)
     _associate(process, process.hiCaloJetTask)
+    return process
+
+
+def addEventPlaneTable(process):
+    """Event-plane angles (the official RecoHI/HiEvtPlaneAlgos 12-plane set: HF +/-/comb
+    and tracker, harmonics n=2,3) computed directly from MiniAOD packedPFCandidates by
+    the HIEvtPlaneTableProducer. The standard EvtPlaneProducer only fills the *tracker*
+    planes on MiniAOD (its HF Q-vectors need reco::PFCandidates, absent in MiniAOD), so
+    this reconstructs the HF reference planes too. These are RAW (un-flattened) planes:
+    the raw Qx/Qy are stored so recentering/flattening can be done offline."""
+    process.hiEvtPlaneTable = cms.EDProducer(
+        "HIEvtPlaneTableProducer",
+        pfCandidates=cms.InputTag("packedPFCandidates"),
+        lostTracks=cms.InputTag("lostTracks"),
+        minPVassociation=cms.int32(2),  # fromPV() >= PVTight for tracker planes
+    )
+    process.hiEvtPlaneTask = cms.Task(process.hiEvtPlaneTable)
+    _associate(process, process.hiEvtPlaneTask)
     return process
 
 
@@ -499,7 +525,8 @@ def HINHADCustomNanoAOD(process):
     addHITracks(process)                      # unpacked reco::Tracks + vertices
     addHIMuons(process)                       # unpacked muons -> Muon table + HI extension
     addHIEGM(process)                         # HI cone isolation on Electron/Photon tables
-    addHICaloJets(process)                    # slimmed calo jets -> CaloJet table
+    addHICaloJets(process)                    # CaloJet table: kinematics/area/emEF/hadEF + PF in-cone ID
+    addEventPlaneTable(process)               # HF +/- /comb + tracker event planes (n=2,3)
     addHIEventFilters(process)                # HI event-selection Flag_* + HF tower counts
     stripPPonlyContent(process)               # drop pp-only tables absent from HI MiniAOD
     tolerateMissingProducts(process)
