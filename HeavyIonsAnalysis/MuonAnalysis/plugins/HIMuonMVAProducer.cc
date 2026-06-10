@@ -26,6 +26,7 @@ namespace pat {
           muonMinPt_(iConfig.getParameter<double>("muon_minPt")),
           rVeto_(iConfig.getParameter<double>("iso_rVeto")),
           rCone_(iConfig.getParameter<double>("iso_rCone")),
+          era_(iConfig.getParameter<std::string>("era")),
           isoCorr_(getCorrection(iConfig)),
           isoModel_(getModel(iConfig)) {}
     ~HIMuonMVAProducer() override{};
@@ -43,15 +44,16 @@ namespace pat {
     const edm::EDPutTokenT<pat::MuonCollection> patMuonPutToken_;
     const reco::PFCandidate convert_;
     const double pfMaxEta_, skRadius_, muonMinPt_, rVeto_, rCone_;
+    const std::string era_;
     const std::shared_ptr<const correction::Correction> isoCorr_;
-    const std::unique_ptr<XGBooster> isoModel_;
+    const std::unique_ptr<const XGBooster> isoModel_;
 
     std::shared_ptr<const correction::Correction> getCorrection(const edm::ParameterSet& iConfig) {
       const auto& csetIsoRhoCorrections = correction::CorrectionSet::from_file(iConfig.getParameter<edm::FileInPath>("file_isoCorr").fullPath());
       return csetIsoRhoCorrections->at("iso_rho_correction");
     }
 
-    XGBooster* getModel(const edm::ParameterSet& iConfig, const int& nfeat=8) {
+    const XGBooster* getModel(const edm::ParameterSet& iConfig, const int& nfeat=8) {
       auto model = new XGBooster(iConfig.getParameter<edm::FileInPath>("file_isoModel").fullPath());
       for (int i=0; i<nfeat; i++) model->addFeature(std::to_string(i));
       return model;
@@ -69,18 +71,36 @@ bool pat::HIMuonMVAProducer::passMVAIso(const double& mva, const double& cent, c
   const auto cen = cent > 90. ? 90. : cent;
   const auto cen2 = cen*cen;
   const auto cen3 = cen*cen*cen;
-  //Working point: WP95
-  if (wp==WP95)
-    cut = 7.978478076287510e-07*cen3 + -0.00010197402752356007*cen2 +  0.00073749187425983740*cent + 0.44973546555978620;
-  //Working point: WP90
-  else if (wp==WP90)
-    cut = 5.023194760398722e-07*cen3 + -6.386564313645383e-05*cen2  + -0.00030034696427764694*cent + 0.26733467400525280;
-  //Working point: WP85
-  else if (wp==WP85)
-    cut = 3.642678187960558e-07*cen3 + -4.4289339403249526e-05*cen2 + -0.00038178775816005510*cent + 0.17242030428600790;
-  //Working point: WP80
-  else if (wp==WP80)
-    cut = 2.792961957599443e-07*cen3 + -3.314677611344172e-05*cen2  + -0.00028826679894283433*cent + 0.11887071187630002;
+  if (era_ == "Run3_2023_PbPb") {
+    //Working point: WP95
+    if (wp==WP95)
+      cut = 7.978478076287510e-07*cen3 + -0.00010197402752356007*cen2 +  0.00073749187425983740*cent + 0.44973546555978620;
+    //Working point: WP90
+    else if (wp==WP90)
+      cut = 5.023194760398722e-07*cen3 + -6.386564313645383e-05*cen2  + -0.00030034696427764694*cent + 0.26733467400525280;
+    //Working point: WP85
+    else if (wp==WP85)
+      cut = 3.642678187960558e-07*cen3 + -4.4289339403249526e-05*cen2 + -0.00038178775816005510*cent + 0.17242030428600790;
+    //Working point: WP80
+    else if (wp==WP80)
+      cut = 2.792961957599443e-07*cen3 + -3.314677611344172e-05*cen2  + -0.00028826679894283433*cent + 0.11887071187630002;
+  }
+  else if (era_ == "Run3_2024_PbPb") {
+    //Working point: WP95
+    if (wp==WP95)
+      cut = 1.2499957800987562e-06*cen3 + -0.00012170801189668024*cen2 + 0.0009646003880893901*cent + 0.42182802645206190;
+    //Working point: WP90
+    else if (wp==WP90)
+      cut = 6.8120884256689200e-07*cen3 + -5.506334371017415e-05*cen2 + -0.0009935529044038545*cent + 0.25104723318639510;
+    //Working point: WP85
+    else if (wp==WP85)
+      cut = 4.4843266795507336e-07*cen3 + -3.163070883128350e-05*cen2 + -0.0011605388501508378*cent + 0.16379223117933261;
+    //Working point: WP80
+    else if (wp==WP80)
+      cut = 3.2227736813983527e-07*cen3 + -2.157298771356158e-05*cen2 + -0.0009560693877558988*cent + 0.11370835071080256;
+  }
+  else
+    throw std::logic_error("[ERROR] Wrong era for HIMuonMVAProducer");
   return mva < cut;
 }
 
@@ -155,10 +175,10 @@ void pat::HIMuonMVAProducer::produce(edm::StreamID, edm::Event& iEvent, const ed
     // compute soft killer isolation
     double skPFChIso(0.), skPFNeuIso(0.), skPFPhoIso(0.);
     for (const auto& cand : selPFCands) {
-	    const auto& [pt, eta, phi, id, ieta, skThr] = cand;
-	    const auto dR2 = reco::deltaR2(muon.eta(), muon.phi(), eta, phi);
-	    if (dR2 >= rVeto_ * rVeto_ && dR2 <= rCone_ * rCone_)
-	      (id == 5 ? skPFNeuIso : (id == 4 ? skPFPhoIso : skPFChIso)) += pt * (pt > skThr);
+	  const auto& [pt, eta, phi, id, ieta, skThr] = cand;
+	  const auto dR2 = reco::deltaR2(muon.eta(), muon.phi(), eta, phi);
+	  if (dR2 >= rVeto_ * rVeto_ && dR2 <= rCone_ * rCone_)
+	    (id == 5 ? skPFNeuIso : (id == 4 ? skPFPhoIso : skPFChIso)) += pt * (pt > skThr);
     }
     const auto& skPFIso = skPFChIso + skPFNeuIso + skPFPhoIso;
 
@@ -201,6 +221,7 @@ void pat::HIMuonMVAProducer::fillDescriptions(edm::ConfigurationDescriptions& de
   desc.add<double>("muon_minPt", 0.0)->setComment("Muon minimum pt");
   desc.add<double>("iso_rVeto", 1.E-3)->setComment("Isolation veto radius");
   desc.add<double>("iso_rCone", 0.3)->setComment("Isolation cone radius");
+  desc.add<std::string>("era", "")->setComment("Era");
   desc.add<edm::FileInPath>("file_isoModel", {})->setComment("Path to isolation model");
   desc.add<edm::FileInPath>("file_isoCorr", {})->setComment("Path to isolation rho correction");
   descriptions.add("hiMuons", desc);

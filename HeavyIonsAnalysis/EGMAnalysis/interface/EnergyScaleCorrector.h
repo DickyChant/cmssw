@@ -16,7 +16,8 @@ public:
 
   ~EnergyScaleCorrector() = default;
 
-  void calibrate(reco::GsfElectron& ele, int hiBin) const;
+  void calibrateSuperCluster(reco::GsfElectron& ele, int hiBin) const;
+  void calibrateElectron(reco::GsfElectron& ele, int hiBin) const;
 
 private:
   template <typename T>

@@ -25,6 +25,7 @@ namespace pat {
           electronMinPt_(iConfig.getParameter<double>("electron_minPt")),
           rVeto_(iConfig.getParameter<double>("iso_rVeto")),
           rCone_(iConfig.getParameter<double>("iso_rCone")),
+          era_(iConfig.getParameter<std::string>("era")),
           isoCorr_(getCorrection(iConfig, "iso_rho_correction")),
           hoeCorr_(getCorrection(iConfig, "hoecorrector")),
           isoModel_(getModel(iConfig, "file_isoModel", 9)),
@@ -45,15 +46,16 @@ namespace pat {
 
     const reco::PFCandidate convert_;
     const double pfMaxEta_, skRadius_, electronMinPt_, rVeto_, rCone_;
+    const std::string era_;
     const std::shared_ptr<const correction::Correction> isoCorr_, hoeCorr_;
-    const std::unique_ptr<XGBooster> isoModel_, idModel_;
+    const std::unique_ptr<const XGBooster> isoModel_, idModel_;
 
     std::shared_ptr<const correction::Correction> getCorrection(const edm::ParameterSet& iConfig, const std::string& label) {
       const auto& csetIsoRhoCorrections = correction::CorrectionSet::from_file(iConfig.getParameter<edm::FileInPath>("file_corr").fullPath());
       return csetIsoRhoCorrections->at(label);
     }
 
-    XGBooster* getModel(const edm::ParameterSet& iConfig, const std::string& f, const int& nfeat) {
+    const XGBooster* getModel(const edm::ParameterSet& iConfig, const std::string& f, const int& nfeat) {
       auto model = new XGBooster(iConfig.getParameter<edm::FileInPath>(f).fullPath());
       for (int i=0; i<nfeat; i++) model->addFeature(std::to_string(i));
       return model;
@@ -73,26 +75,51 @@ bool pat::HIElectronInfoProducer::passMVAIso(const double& mva, const double& ce
   const auto cen = cent > 90. ? 90. : cent;
   const auto cen2 = cen*cen;
   const auto cen3 = cen*cen*cen;
-  //Working point: WP95
-  if (wp==WP95) {
-    if (isEB) cut =  1.1213742303052684e-06*cen3 + -0.00015171073540105780*cen2 + 0.00368025276158394370*cen + 0.69091803443919030;
-    else      cut = -3.6813992861380774e-07*cen3 +  8.0837388929110730e-06*cen2 + 3.0096841471229364e-05*cen + 0.82161996960170210;
+  if (era_ == "Run3_2023_PbPb") {
+    //Working point: WP95
+    if (wp==WP95) {
+      if (isEB) cut =  1.1213742303052684e-06*cen3 + -0.00015171073540105780*cen2 + 0.00368025276158394370*cen + 0.69091803443919030;
+      else      cut = -3.6813992861380774e-07*cen3 +  8.0837388929110730e-06*cen2 + 3.0096841471229364e-05*cen + 0.82161996960170210;
+    }
+    //Working point: WP90
+    else if (wp==WP90) {
+      if (isEB) cut =  1.4928752428837551e-06*cen3 + -0.00021314188364472087*cen2 + 0.00532921536800796700*cen + 0.50072628430984800;
+      else      cut = -8.5265211094211280e-09*cen3 + -5.9102242593526630e-05*cen2 + 0.00232248702443364850*cen + 0.67891918907325090;
+    }
+    //Working point: WP85
+    else if (wp==WP85) {
+      if (isEB) cut =  1.4887049145962363e-06*cen3 + -0.00021245424491055573*cen2 + 0.00541199202152453040*cen + 0.35445907806427995;
+      else      cut =  5.3677856468709490e-07*cen3 + -0.00013402600617040136*cen2 + 0.00483495827394446600*cen + 0.53750075876189360;
+    }
+    //Working point: WP80
+    else if (wp==WP80) {
+      if (isEB) cut =  1.3135127239015455e-06*cen3 + -0.00018734725305218886*cen2 + 0.00499209112243616000*cen + 0.24711431505380846;
+      else      cut =  8.9750115827725710e-07*cen3 + -0.00017796358715325376*cen2 + 0.00642536444769568500*cen + 0.41419909838858876;
+    }
   }
-  //Working point: WP90
-  else if (wp==WP90) {
-    if (isEB) cut =  1.4928752428837551e-06*cen3 + -0.00021314188364472087*cen2 + 0.00532921536800796700*cen + 0.50072628430984800;
-    else      cut = -8.5265211094211280e-09*cen3 + -5.9102242593526630e-05*cen2 + 0.00232248702443364850*cen + 0.67891918907325090;
+  else if (era_ == "Run3_2024_PbPb") {
+	if (wp==WP95) {
+      if (isEB) cut = 7.328765094154661e-07*cen3 + -9.7498003432604900e-05*cen2 + 0.0012230468893880259*cen + 0.7702369991500433;
+      else      cut = 7.103822335733674e-08*cen3 + -2.4390324847910922e-05*cen2 + 0.0003892329592145725*cen + 0.8965309838109198;
+    }
+    //Working point: WP90
+    else if (wp==WP90) {
+      if (isEB) cut =  1.0361091885429117e-06*cen3 + -0.0001452625900294474*cen2 + 0.0018454335457036859*cen + 0.6350975511977335;
+      else      cut = -2.4778747865541115e-08*cen3 + -2.408571156814550e-05*cen2 + 3.761103662593878e-05*cen + 0.8347834248451788;
+    }
+    //Working point: WP85
+    else if (wp==WP85) {
+      if (isEB) cut = 1.0743022056410763e-06*cen3 + -0.0001455776745417342*cen2 + 0.001360355308541204*cen + 0.5209777303425940;
+      else      cut = 8.9119177728517880e-08*cen3 + -4.568421674498082e-05*cen2 + 0.000510928940396842*cen + 0.7610220960255258;
+    }
+    //Working point: WP80
+    else if (wp==WP80) {
+      if (isEB) cut = 9.379157276780660e-07*cen3 + -0.00012303093930435887*cen2 + 0.0006454795726067941*cen + 0.4252862909844413;
+      else      cut = 2.926280382152593e-07*cen3 + -7.3879896800271420e-05*cen2 + 0.0012451216903334715*cen + 0.6812169934367316;
+    }
   }
-  //Working point: WP85
-  else if (wp==WP85) {
-    if (isEB) cut =  1.4887049145962363e-06*cen3 + -0.00021245424491055573*cen2 + 0.00541199202152453040*cen + 0.35445907806427995;
-    else      cut =  5.3677856468709490e-07*cen3 + -0.00013402600617040136*cen2 + 0.00483495827394446600*cen + 0.53750075876189360;
-  }
-  //Working point: WP80
-  else if (wp==WP80) {
-    if (isEB) cut =  1.3135127239015455e-06*cen3 + -0.00018734725305218886*cen2 + 0.00499209112243616000*cen + 0.24711431505380846;
-    else      cut =  8.9750115827725710e-07*cen3 + -0.00017796358715325376*cen2 + 0.00642536444769568500*cen + 0.41419909838858876;
-  }
+  else
+    throw std::logic_error("[ERROR] Wrong era for HIElectronInfoProducer");
   return mva < cut;
 }
 
@@ -100,26 +127,52 @@ bool pat::HIElectronInfoProducer::passMVAId(const double& mva, const double& cen
   double cut(10.);
   const auto cen2 = cen*cen;
   const auto cen3 = cen*cen*cen;
-  //Working point: WP95
-  if (wp==WP95) {
-    if (isEB) cut = -8.6895588483154620e-07*cen3 + 0.00013933876005428234*cen2 + -0.008619594547272720*cen + 0.45763429913293496;
-    else      cut = -1.4970873446950470e-06*cen3 + 0.00024879582298806160*cen2 + -0.015436599736040429*cen + 0.72788786967830470;
+  if (era_ == "Run3_2023_PbPb") {
+    //Working point: WP95
+    if (wp==WP95) {
+      if (isEB) cut = -8.6895588483154620e-07*cen3 + 0.00013933876005428234*cen2 + -0.008619594547272720*cen + 0.45763429913293496;
+      else      cut = -1.4970873446950470e-06*cen3 + 0.00024879582298806160*cen2 + -0.015436599736040429*cen + 0.72788786967830470;
+    }
+    //Working point: WP90
+    else if (wp==WP90) {
+      if (isEB) cut = -4.6614422355778817e-07*cen3 + 8.0092208959414990e-05*cen2 + -0.005222306985603681*cen + 0.23094224803139338;
+      else      cut = -1.3010247333840360e-06*cen3 + 0.00021736111417101613*cen2 + -0.013308168801268280*cen + 0.51108687929103980;
+    }
+    //Working point: WP85
+    else if (wp==WP85) {
+      if (isEB) cut = -2.7396191468306490e-07*cen3 + 4.7113855045057714e-05*cen2 + -0.002967751640976904*cen + 0.12148874341679987;
+      else      cut = -8.3321554760551400e-07*cen3 + 0.00014285719403057067*cen2 + -0.009134790058710965*cen + 0.34550384804492130;
+    }
+    //Working point: WP80
+    else if (wp==WP80) {
+      if (isEB) cut = -1.3961443236681390e-07*cen3 + 2.3527418966464617e-05*cen2 + -0.001472122698460129*cen + 0.06641013597502561;
+      else      cut = -5.0247362141513420e-07*cen3 + 8.9424796689439320e-05*cen2 + -0.006059630793483640*cen + 0.23549473657009040;
+    }
   }
-  //Working point: WP90
-  else if (wp==WP90) {
-    if (isEB) cut = -4.6614422355778817e-07*cen3 + 8.0092208959414990e-05*cen2 + -0.005222306985603681*cen + 0.23094224803139338;
-    else      cut = -1.3010247333840360e-06*cen3 + 0.00021736111417101613*cen2 + -0.013308168801268280*cen + 0.51108687929103980;
+  else if (era_ == "Run3_2024_PbPb") {
+	//Working point: WP95
+    if (wp==WP95) {
+      if (isEB) cut = -9.4774352842156690e-07*cen3 + 0.00015653690327347742*cen2 + -0.009387708156664697*cen + 0.41140272553748947;
+      else      cut = -1.4049842348043947e-06*cen3 + 0.00023254958465904297*cen2 + -0.014866306444144427*cen + 0.78077207997560640;
+    }
+    //Working point: WP90
+    else if (wp==WP90) {
+      if (isEB) cut = -4.292868861109418e-07*cen3 + 7.5303950388878160e-05*cen2 + -0.004866531594642078*cen + 0.19588566380343234;
+      else      cut = -1.338098942709857e-06*cen3 + 0.00023027398588406142*cen2 + -0.014806909329362598*cen + 0.60567297539071930;
+    }
+    //Working point: WP85
+    else if (wp==WP85) {
+      if (isEB) cut = -2.3906544394774750e-07*cen3 + 4.2234169680768164e-05*cen2 + -0.0026953285126890903*cen + 0.10296753486055420;
+      else      cut = -1.0605903785715095e-06*cen3 + 0.00018720483763156053*cen2 + -0.0121747238205056150*cen + 0.45337485458915255;
+    }
+    //Working point: WP80
+    else if (wp==WP80) {
+      if (isEB) cut = -1.2914515994206838e-07*cen3 + 2.2839098046148190e-05*cen2 + -0.0014630761437092177*cen + 0.057963473055503444;
+      else      cut = -7.1326150524538720e-07*cen3 + 0.00012962099415557416*cen2 + -0.0087578691709684390*cen + 0.327226521920732870;
+    }
   }
-  //Working point: WP85
-  else if (wp==WP85) {
-    if (isEB) cut = -2.7396191468306490e-07*cen3 + 4.7113855045057714e-05*cen2 + -0.002967751640976904*cen + 0.12148874341679987;
-    else      cut = -8.3321554760551400e-07*cen3 + 0.00014285719403057067*cen2 + -0.009134790058710965*cen + 0.34550384804492130;
-  }
-  //Working point: WP80
-  else if (wp==WP80) {
-    if (isEB) cut = -1.3961443236681390e-07*cen3 + 2.3527418966464617e-05*cen2 + -0.001472122698460129*cen + 0.06641013597502561;
-    else      cut = -5.0247362141513420e-07*cen3 + 8.9424796689439320e-05*cen2 + -0.006059630793483640*cen + 0.23549473657009040;
-  }
+  else
+    throw std::logic_error("[ERROR] Wrong era for HIElectronInfoProducer");
   return mva < cut;
 }
 
@@ -232,9 +285,9 @@ void pat::HIElectronInfoProducer::produce(edm::StreamID, edm::Event& iEvent, con
     double rho(-1.);
     for (size_t i=1; i<etaMap.size(); i++)
       if (electron.eta() >= etaMap[i-1] && electron.eta() < etaMap[i]) {
-		    rho = rhoMap[i-1];
-		    break;
-	    }
+		rho = rhoMap[i-1];
+		break;
+	  }
     if (rho < 0)
       continue;
 
@@ -268,9 +321,9 @@ void pat::HIElectronInfoProducer::produce(edm::StreamID, edm::Event& iEvent, con
     double pfChIso(0.), pfNeuIso(0.), pfPhoIso(0.);
     double skPFChIso(0.), skPFNeuIso(0.), skPFPhoIso(0.);
     for (const auto& cand : selPFCands) {
-	    const auto& [pt, eta, phi, id, ieta, skThr] = cand;
-	    const auto dR2 = reco::deltaR2(electron.eta(), electron.phi(), eta, phi);
-	    if (dR2 >= rVeto_ * rVeto_ && dR2 <= rCone_ * rCone_) {
+	  const auto& [pt, eta, phi, id, ieta, skThr] = cand;
+	  const auto dR2 = reco::deltaR2(electron.eta(), electron.phi(), eta, phi);
+	  if (dR2 >= rVeto_ * rVeto_ && dR2 <= rCone_ * rCone_) {
         (id == 5 ? pfNeuIso : (id == 4 ? pfPhoIso : pfChIso)) += pt;
 	    (id == 5 ? skPFNeuIso : (id == 4 ? skPFPhoIso : skPFChIso)) += pt * (pt > skThr);
       }
@@ -326,6 +379,7 @@ void pat::HIElectronInfoProducer::fillDescriptions(edm::ConfigurationDescription
   desc.add<double>("electron_minPt", 0.0)->setComment("Electron minimum pt");
   desc.add<double>("iso_rVeto", 0.026)->setComment("Isolation veto radius");
   desc.add<double>("iso_rCone", 0.3)->setComment("Isolation cone radius");
+  desc.add<std::string>("era", "")->setComment("Era");
   desc.add<edm::FileInPath>("file_idModel", {})->setComment("Path to identification model");
   desc.add<edm::FileInPath>("file_isoModel", {})->setComment("Path to isolation model");
   desc.add<edm::FileInPath>("file_corr", {})->setComment("Path to rho correction");

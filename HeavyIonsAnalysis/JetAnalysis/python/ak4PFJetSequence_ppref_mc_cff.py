@@ -16,5 +16,4 @@ ak4PFJetAnalyzer = inclusiveJetAnalyzer.clone(
     genPtMin = cms.untracked.double(5),
     hltTrgResults = cms.untracked.string('TriggerResults::'+'HISIGNAL'),
     genDroppedBranches = cms.InputTag("ak4GenJets","droppedBranches"),
-    jetFlavourInfos = cms.InputTag("ak4PFFlavourInfos")
     )

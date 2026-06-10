@@ -7,7 +7,7 @@ hltanalysis = cms.EDAnalyzer(
     HLTProcessName = cms.string('HLT'),
     hltresults = cms.InputTag('TriggerResults::HLT'),
     l1results = cms.InputTag('gtStage2Digis'),
-    hltdummybranches = dummy_branches_for_PbPb_2023_HLT,
-    l1dummybranches = dummy_branches_for_PbPb_2023_L1,
+    hltdummybranches = dummy_branches_for_PbPb_2025_HLT,
+    l1dummybranches = dummy_branches_for_PbPb_2025_L1,
     hltPSProvCfg=cms.PSet(stageL1Trigger = cms.uint32(2)),
     )

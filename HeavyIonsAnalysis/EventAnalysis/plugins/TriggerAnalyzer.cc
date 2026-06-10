@@ -61,6 +61,8 @@ private:
   edm::ESGetToken<L1TUtmTriggerMenu, L1TUtmTriggerMenuRcd> l1GtMenuToken_;
 
   std::unique_ptr<HLTPrescaleProvider> hltPrescaleProvider_;
+
+  std::string getName(const std::string& t) { return t.substr(0, t.rfind("_")+2); }
 };
 
 static constexpr int kMaxHLTFlag = 1000;
@@ -137,7 +139,8 @@ void TriggerAnalyzer::analyze(edm::Event const& iEvent, edm::EventSetup const& i
     // 1st event : Book as many branches as trigger paths provided in the input...
     if (HltEvtCnt == 0) {
       int itdum = 0;
-      for (auto const& dummy : hltdummies) {
+      for (auto const& t : hltdummies) {
+        const auto& dummy = getName(t);
         TString dummyname(dummy.data());
         t_->Branch(dummyname, hltflag + itdum, dummyname + "/I");
         t_->Branch(dummyname + "_PrescaleNumerator", hltPrescaleNumerator + itdum, dummyname + "_PrescaleNumerator/I");
@@ -147,7 +150,7 @@ void TriggerAnalyzer::analyze(edm::Event const& iEvent, edm::EventSetup const& i
       }
 
       for (int itrig = 0; itrig != ntrigs; ++itrig) {
-        const std::string& trigname = triggerNames.triggerName(itrig);
+        const std::string& trigname = getName(triggerNames.triggerName(itrig));
         if (pathtoindex.find(trigname) == pathtoindex.end()) {
           TString hltname = trigname;
           t_->Branch(hltname, hltflag + itdum + itrig, hltname + "/I");
@@ -166,7 +169,7 @@ void TriggerAnalyzer::analyze(edm::Event const& iEvent, edm::EventSetup const& i
       const std::string& trigname = triggerNames.triggerName(itrig);
       bool accept = hltresults->accept(itrig);
 
-      int index = pathtoindex[trigname];
+      int index = pathtoindex[getName(trigname)];
       thisTriggerPrescale = hltPrescaleProvider_->prescaleValue<FractionalPrescale>(iEvent, iSetup, trigname);
       hltPrescaleNumerator[index] = thisTriggerPrescale.numerator();
       hltPrescaleDenominator[index] = thisTriggerPrescale.denominator();

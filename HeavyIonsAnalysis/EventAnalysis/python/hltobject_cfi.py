@@ -210,6 +210,15 @@ trigger_list_data_2023 = cms.vstring(
    'HLT_HICscCluster_Tight_v'
 )
 
+trigger_list_data_2025_skimmed = cms.vstring(
+    'HLT_HIMinimumBiasHF1ANDZDC1nOR_v',
+    'HLT_HIMinimumBiasHF1ANDZDC2nOR_v',
+    'HLT_HIMinimumBiasHF1AND_v',
+    'HLT_HIL2SingleMu7_v',
+    'HLT_HIEle20Gsf_v',
+    'HLT_HIGEDPhoton10_v'
+)
+
 trigger_list_data_2025 = cms.vstring(
    'HLT_HIEphemeralPhysics_v',
    'HLT_HIEphemeralZeroBias_v',
