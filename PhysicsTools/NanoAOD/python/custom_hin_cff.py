@@ -188,9 +188,26 @@ def addCentralityTable(process, addBin=True):
 
     addBin=True  -> full centrality table including the integer hiBin (HINHAD).
     addBin=False -> HF / ZDC sums only, no centrality bin (HINUPC).
+
+    When HeavyIonsAnalysis is present in the area (forest branch), the hiBin is
+    recomputed in-process with the 2025 recalibrated table
+    (HeavyIonsAnalysis.EventAnalysis.hiCentralityBin2025_cfi) instead of taking
+    the PromptReco bin from the file - the two differ by ~11 bins (~5.5%
+    centrality) on 2025 data. The in-process product wins the InputTag
+    resolution, so GO_hiBin then matches the forest hiBin exactly.
     """
     process.centralityTable = (centralityTable if addBin else hfTable).clone()
-    process.centralityTableTask = cms.Task(process.centralityTable)
+    mods = [process.centralityTable]
+    if addBin:
+        try:
+            from HeavyIonsAnalysis.EventAnalysis.hiCentralityBin2025_cfi import centralityBin2025
+            process.centralityBin = centralityBin2025.clone()
+            mods.insert(0, process.centralityBin)
+            print("[custom_hin_cff] GO_hiBin recomputed in-process (2025 recalibrated table)")
+        except ImportError:
+            print("[custom_hin_cff] HeavyIonsAnalysis not in this area -> "
+                  "GO_hiBin = PromptReco centralityBin from the input file")
+    process.centralityTableTask = cms.Task(*mods)
     _associate(process, process.centralityTableTask)
     return process
 
