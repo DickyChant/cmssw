@@ -167,7 +167,10 @@ doWTARecluster = True        # Add jet phi and eta for WTA axis
 for jetR, doFlow in zip([0.3, 0.3, 0.4], [False, True, True]):
     R = str(int(jetR*10))
     from HeavyIonsAnalysis.JetAnalysis.deepNtupleSettings_cff import candidateBtaggingMiniAOD
-    candidateBtaggingMiniAOD(process, isMC = False, jetPtMin = jetPtMin, jetR = jetR, jetCorrLevels = ['L2Relative', 'L2L3Residual'], doFlow = doFlow)
+    # inclusiveSV: HI-inclusive SV remake (minHits=0, minPt=0.8) instead of the
+    # pp_on_AA-tightened slimmedSecondaryVertices -> tagger inputs identical to
+    # the NanoAOD HINHADSKIM route (setupJets_PbPb_cff)
+    candidateBtaggingMiniAOD(process, isMC = False, jetPtMin = jetPtMin, jetR = jetR, jetCorrLevels = ['L2Relative', 'L2L3Residual'], doFlow = doFlow, inclusiveSV = True)
 
     # setup jet analyzer
     jL = f"Cs{R}Flow" if doFlow else f"Cs{R}"

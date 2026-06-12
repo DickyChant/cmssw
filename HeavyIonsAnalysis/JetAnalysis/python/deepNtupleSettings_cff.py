@@ -1,6 +1,6 @@
 import FWCore.ParameterSet.Config as cms
 
-def candidateBtaggingMiniAOD(process, isMC = True, jetPtMin = 15, jetR = 0.4, jetCorrLevels = ['L2Relative', 'L3Absolute'], doFlow = False):
+def candidateBtaggingMiniAOD(process, isMC = True, jetPtMin = 15, jetR = 0.4, jetCorrLevels = ['L2Relative', 'L3Absolute'], doFlow = False, inclusiveSV = False):
     # DeepNtuple settings
     R = str(int(jetR*10))
     jetCorrectionsAK = ('AK4PF', jetCorrLevels, 'None')
@@ -73,6 +73,31 @@ def candidateBtaggingMiniAOD(process, isMC = True, jetPtMin = 15, jetR = 0.4, je
     process.inclusiveCandidateNegativeSecondaryVertices = inclusiveCandidateNegativeSecondaryVertices.clone()
     process.svTask = cms.Task(process.inclusiveCandidateNegativeVertexFinder, process.candidateNegativeVertexMerger, process.candidateNegativeVertexArbitrator, process.inclusiveCandidateNegativeSecondaryVertices)
 
+    # inclusiveSV: remake the positive SVs from packedPFCandidates with the
+    # HI-inclusive selection (minHits=0, minPt=0.8; as setupJets_PbPb_cff /
+    # the HIN NanoAOD route) instead of the PromptReco slimmedSecondaryVertices
+    # (pp_on_AA-tightened: minHits=10, minPt=1.0). The negative finder gets the
+    # same selection so positive/negative stay symmetric.
+    svSource = cms.InputTag('slimmedSecondaryVertices')
+    if inclusiveSV:
+        from RecoVertex.AdaptiveVertexFinder.inclusiveVertexing_cff import inclusiveCandidateVertexFinder, candidateVertexMerger, candidateVertexArbitrator, inclusiveCandidateSecondaryVertices
+        process.inclusiveCandidateVertexFinder = inclusiveCandidateVertexFinder.clone(
+            tracks = "packedPFCandidates",
+            primaryVertices = "offlineSlimmedPrimaryVertices",
+            minHits = 0,
+            minPt = 0.8
+        )
+        process.candidateVertexMerger = candidateVertexMerger.clone()
+        process.candidateVertexArbitrator = candidateVertexArbitrator.clone(
+            tracks = "packedPFCandidates",
+            primaryVertices = "offlineSlimmedPrimaryVertices"
+        )
+        process.inclusiveCandidateSecondaryVertices = inclusiveCandidateSecondaryVertices.clone()
+        process.svTask.add(process.inclusiveCandidateVertexFinder, process.candidateVertexMerger, process.candidateVertexArbitrator, process.inclusiveCandidateSecondaryVertices)
+        process.inclusiveCandidateNegativeVertexFinder.minHits = 0
+        process.inclusiveCandidateNegativeVertexFinder.minPt = 0.8
+        svSource = cms.InputTag('inclusiveCandidateSecondaryVertices')
+
     # Create unsubtracted reco jets
     from PhysicsTools.PatAlgos.tools.jetTools import addJetCollection
     addJetCollection(
@@ -84,7 +109,7 @@ def candidateBtaggingMiniAOD(process, isMC = True, jetPtMin = 15, jetR = 0.4, je
         rParam             = jetR,
         pvSource           = cms.InputTag("offlineSlimmedPrimaryVertices"),
         pfCandidates       = cms.InputTag("packedPFCandidates"),
-        svSource           = cms.InputTag('slimmedSecondaryVertices'),
+        svSource           = svSource,
         muSource           = cms.InputTag("slimmedMuons"),
         elSource           = cms.InputTag("slimmedElectrons"),
         getJetMCFlavour    = isMC,
@@ -115,7 +140,7 @@ def candidateBtaggingMiniAOD(process, isMC = True, jetPtMin = 15, jetR = 0.4, je
         rParam             = jetR,
         pvSource           = cms.InputTag("offlineSlimmedPrimaryVertices"),
         pfCandidates       = cms.InputTag("packedPFCandidates"),
-        svSource           = cms.InputTag('slimmedSecondaryVertices'),
+        svSource           = svSource,
         muSource           = cms.InputTag("slimmedMuons"),
         elSource           = cms.InputTag("slimmedElectrons"),
         getJetMCFlavour    = isMC,
@@ -196,7 +221,7 @@ def candidateBtaggingMiniAOD(process, isMC = True, jetPtMin = 15, jetR = 0.4, je
         jetCorrections = jetCorrectionsAK,
         pfCandidates = cms.InputTag('packedPFCandidates'),
         pvSource = cms.InputTag("offlineSlimmedPrimaryVertices"),
-        svSource = cms.InputTag('slimmedSecondaryVertices'),
+        svSource = svSource,
         muSource = cms.InputTag('slimmedMuons'),
         elSource = cms.InputTag('slimmedElectrons'),
         btagInfos = bTagInfos,
@@ -214,7 +239,7 @@ def candidateBtaggingMiniAOD(process, isMC = True, jetPtMin = 15, jetR = 0.4, je
         getattr(process, f'{mod}JetTagsAK{jL}DeepFlavour').model_path = 'HeavyIonsAnalysis/Configuration/data/'+(f'PbPb_AK3_2024_v6.onnx' if jetR==0.3 else f'UParTAK{R}_PbPb_2024.onnx')
         getattr(process, f'{mod}TagInfosAK{jL}DeepFlavour').sort_cand_by_pt = True
         getattr(process, f'{mod}TagInfosAK{jL}DeepFlavour').fix_lt_sorting = True
-        getattr(process, f'{mod}TagInfosAK{jL}DeepFlavour').secondary_vertices = 'inclusiveCandidateNegativeSecondaryVertices' if 'Negative' in mod else 'slimmedSecondaryVertices'
+        getattr(process, f'{mod}TagInfosAK{jL}DeepFlavour').secondary_vertices = 'inclusiveCandidateNegativeSecondaryVertices' if 'Negative' in mod else svSource.getModuleLabel()
 
     getattr(process,f'pfImpactParameterTagInfosAK{jL}DeepFlavour').maxDeltaR = jetR
     for taginfo in [f"pfDeepFlavourTagInfosAK{jL}DeepFlavour", f"pfParticleTransformerAK4TagInfosAK{jL}DeepFlavour", f"pfUnifiedParticleTransformerAK4TagInfosAK{jL}DeepFlavour", f"pfNegativeUnifiedParticleTransformerAK4TagInfosAK{jL}DeepFlavour"]:
