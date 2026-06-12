@@ -3,7 +3,8 @@
 # Type: data
 #
 # Skim: full-hadronic ttbar multijet selection
-#       (>= 6 akCs3PF jets with UParT-regressed pT, >= 2 loose UParT b-tags)
+#       (>= 5 akCs3PF jets with UParT-regressed pT >= 25 GeV, |eta| <= 2.1;
+#        no b-tag requirement - optional via requireBTags)
 #
 # Derived from forest_miniAOD_ParticleTransformer_run3_SKIM_DATA.py
 # (stahlleiton/cmssw @ HIForest_TTBAR_Run3_2025_PbPb). Only the
@@ -245,7 +246,9 @@ for _mod in [process.PackedPFTowers, process.hiPuRho]:
 fullHadNJets     = 5      # min number of selected jets (offline: >= 6 signal region,
                           # nJet == 5 kept as weak-supervision sideband -> skim at >= 5)
 fullHadJetPtMin  = 25.0   # GeV, on UParT-regressed pT (offline: 30; margin for JEC variations/residuals)
-fullHadJetAbsEta = 2.4    # offline: 2.1 (margin)
+fullHadJetAbsEta = 2.1    # = offline cut; eta is not recalibrated, so no margin is
+                          # needed (unlike pT) - an offline jet at |eta|<2.1 is
+                          # the same jet at skim level
 requireBTags     = False  # data-driven (CWoLa/anomaly-detection) analysis needs the FULL
                           # b-tag spectrum in the forest (0B/1B depleted mixtures, negative
                           # tags); measured on 2025 data the b-cut also gives ~no rate
@@ -269,7 +272,7 @@ _uparTPt  = f"correctedJet('Uncorrected').pt * bDiscriminator('{_uparT}:ptcorr')
 # clustering threshold (15), so this only rejects events with < 6 Cs3 jets
 process.fullHadPreJets = cms.EDFilter("PATJetSelector",
     src = cms.InputTag("patJetsAKCs3PF"),
-    cut = cms.string("correctedJet('Uncorrected').pt >= 15.0 && abs(eta) <= 2.6")
+    cut = cms.string("correctedJet('Uncorrected').pt >= 15.0 && abs(eta) <= 2.3")
 )
 process.fullHadPreJetCount = cms.EDFilter("CandViewCountFilter",
     src = cms.InputTag("fullHadPreJets"),
