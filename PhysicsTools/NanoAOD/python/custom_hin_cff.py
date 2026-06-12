@@ -428,12 +428,13 @@ def addHIEGM(process):
 
 
 def addFullHadSkim(process,
-                   nJets=5, jetPtMin=25.0, jetAbsEta=2.4,
+                   nJets=5, jetPtMin=25.0, jetAbsEta=2.1,
                    requireBTags=False, nBJets=2, bDiscrMin=0.15,
                    usePreCount=True):
     """Skim the NanoAOD for the fully hadronic ttbar / weak-supervision (CWoLa)
     PbPb analysis: keep events with >= nJets akCs3PF jets with UParT-regressed
-    pT (= rawPt * UParT ptcorr) >= jetPtMin and |eta| <= jetAbsEta.
+    pT (= rawPt * UParT ptcorr) >= jetPtMin and |eta| <= jetAbsEta (the offline
+    analysis acceptance: eta is not recalibrated, so unlike pT no margin is needed).
 
     Stays strictly looser than the offline selection (>=6 jets, pT > 30,
     |eta| < 2.1 signal region; nJet == 5 sideband), and applies NO b-tag
@@ -484,7 +485,7 @@ def addFullHadSkim(process,
     # cheap unbiased precount on the bare subtracted jets (threshold = clustering pT min)
     process.fullHadPreJets = cms.EDFilter("PATJetSelector",
         src = cms.InputTag("patJetsAKCs3PF"),
-        cut = cms.string("correctedJet('Uncorrected').pt >= 15.0 && abs(eta) <= 2.6"))
+        cut = cms.string("correctedJet('Uncorrected').pt >= 15.0 && abs(eta) <= 2.3"))
     process.fullHadPreJetCount = cms.EDFilter("CandViewCountFilter",
         src = cms.InputTag("fullHadPreJets"), minNumber = cms.uint32(nJets))
 
