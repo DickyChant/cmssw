@@ -32,6 +32,50 @@ Optional process modifier `--procModifiers run3_nanoAOD_HIN` applies a soft
 `pt > 0.5` threshold to the PF-candidate / lost-track tables to keep the output
 size under control in high-multiplicity events.
 
+## HINHADSKIM: fully hadronic ttbar skim flavour
+
+`HINHADSKIM` = `HINHAD` + `custom_hin_cff.addFullHadSkim`: keeps only events
+with >= 5 akCs3PF jets with UParT-regressed pT (`rawPt * UParT ptcorr`)
+>= 25 GeV and |eta| <= 2.4 — strictly looser than the offline full-hadronic
+selection (>= 6 jets, pT > 30, |eta| < 2.1 signal region, nJet == 5 sideband).
+No b-tag cut is applied so the full b-tag spectrum (0B/1B mixtures, negative
+tags) survives for the data-driven (CWoLa / anomaly-detection) region
+building; `requireBTags=True` re-enables >= 2 jets with normalized UParT
+b-discriminant >= 0.15. An unbiased >= 5-jet precount on the bare
+`patJetsAKCs3PF` keeps the b-tag inference off for most events; the skim
+filters are prepended to `nanoAOD_step` (gates the scheduled nano tables) and
+the NanoAOD output gets `SelectEvents = ["nanoAOD_step"]`.
+
+The akCs3PF chain (UParT pinned to the forest's
+`HeavyIonsAnalysis/Configuration/data/PbPb_AK3_2024_v6.onnx` training, so the
+scores and the measured skim rate match the HiForest twin; the central
+cms-data 2023 model regresses low-pT jets ~35% higher) and an
+`akCs3PFJet` table — including the embedded UParT outputs as `UParT_*` columns
+(new `discriminatorTags/Names` params of `HiInclusiveJetTableProducer`) — are
+added automatically. The chain also runs the **negative-tag UParT**
+(`UParTNeg_*` columns; negative-SV reco + flipped-sign tagger with the same
+PbPb model and HI fallbacks) for the data-driven light-mistag control regions
+— the BTVNano negative-tag pattern, but on the HI jets/model (the `@BTV`
+flavour itself targets `slimmedJetsPuppi`, absent in HI MiniAOD). With
+`doBtagging=True` the taginfo cone (`jet_radius`, IP `maxDeltaR`) now follows
+the actual jet radius (it was silently 0.4 for all radii before).
+
+Requires `HeavyIonsAnalysis/JetAnalysis` (forest branch) checked out in the
+same area, like the HINHAD jet tables.
+
+```bash
+cmsDriver.py hin_fullhad_nano -s NANO:@HINHADSKIM --data --era Run3_pp_on_PbPb \
+  --conditions 151X_dataRun3_Prompt_v1 --eventcontent NANOAOD --datatier NANOAOD \
+  --filein /store/hidata/HIRun2025A/HIPhysicsRawPrime0/MINIAOD/... \
+  --fileout file:hin_fullhad_nano.root -n -1
+```
+
+Reference: twin HiForest skim
+(`HeavyIonsAnalysis/Configuration/test/forest_miniAOD_ParticleTransformer_run3_SKIM_FULLHAD_DATA.py`
+on the `HIForest_TTBAR_Run3_2025_PbPb` forest branch), validated on 2025 PbPb
+data (run 400059): ~8e-5 pass rate at >= 5 jets (all events 0-5% central),
+~0.4 s/event.
+
 ## Implementation
 
 * `python/custom_hin_cff.py` — customise functions `HINUPCCustomNanoAOD` /

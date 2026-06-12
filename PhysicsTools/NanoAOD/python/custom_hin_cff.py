@@ -223,8 +223,9 @@ def addHIJets(process, labels=("4", "4Flow"), doBtagging=False, jetPtMin=15.0):
         if getattr(process, "schedule", None) is not None:
             process.schedule.append(process.forest)
 
-    process.hiJetTableTask = cms.Task()
-    _associate(process, process.hiJetTableTask)
+    if not hasattr(process, "hiJetTableTask"):
+        process.hiJetTableTask = cms.Task()
+        _associate(process, process.hiJetTableTask)
 
     for label in labels:
         candidateBtaggingMiniAOD(process, isMC=isMC, jetPtMin=jetPtMin,
@@ -232,8 +233,22 @@ def addHIJets(process, labels=("4", "4Flow"), doBtagging=False, jetPtMin=15.0):
         coll = "selectedUpdatedPatJetsAK" + label + "PFBtag"
         tabname = "akCs" + label + "PFJet"  # akCs4PFJet, akCs4FlowPFJet
         rParam = 0.4 if label == "0" else float(label.replace("Flow", "")) * 0.1
+        # tabulate the embedded UParT outputs (PbPb training; un-postfixed names)
+        discTags, discNames = [], []
+        if doBtagging:
+            _uparT = "pfUnifiedParticleTransformerAK4JetTags"
+            for f in ("probb", "probbb", "problepb", "probc", "probg", "probu", "probd", "probs",
+                      "probtaup1h0p", "probtaup1h1p", "probtaup1h2p", "probtaup3h0p", "probtaup3h1p",
+                      "probtaum1h0p", "probtaum1h1p", "probtaum1h2p", "probtaum3h0p", "probtaum3h1p",
+                      "probele", "probmu", "ptcorr", "ptnu"):
+                discTags.append(_uparT + ":" + f)
+                discNames.append("UParT_" + f)
+                discTags.append("pfNegative" + _uparT[2:] + ":" + f)
+                discNames.append("UParTNeg_" + f)
         setattr(process, tabname + "Table", cms.EDProducer(
             "HiInclusiveJetTableProducer",
+            discriminatorTags=cms.vstring(discTags),
+            discriminatorNames=cms.vstring(discNames),
             jets=cms.InputTag(coll),
             pfCandidates=cms.InputTag("packedPFCandidates"),
             name=cms.string(tabname),
@@ -409,6 +424,95 @@ def addHIEGM(process):
         t = cms.Task(getattr(process, isoMod), getattr(process, isoMod + "ExtTable"))
         setattr(process, obj + "HIIsoTask", t)
         _associate(process, t)
+    return process
+
+
+def addFullHadSkim(process,
+                   nJets=5, jetPtMin=25.0, jetAbsEta=2.4,
+                   requireBTags=False, nBJets=2, bDiscrMin=0.15,
+                   usePreCount=True):
+    """Skim the NanoAOD for the fully hadronic ttbar / weak-supervision (CWoLa)
+    PbPb analysis: keep events with >= nJets akCs3PF jets with UParT-regressed
+    pT (= rawPt * UParT ptcorr) >= jetPtMin and |eta| <= jetAbsEta.
+
+    Stays strictly looser than the offline selection (>=6 jets, pT > 30,
+    |eta| < 2.1 signal region; nJet == 5 sideband), and applies NO b-tag
+    requirement so the full b-tag spectrum (0B/1B mixtures, negative tags)
+    survives for the data-driven region building; requireBTags=True
+    re-enables a >= nBJets cut on the normalized UParT b discriminant
+    ((b+bb+lepb)/(b+bb+lepb+c+s+u+d+g) >= bDiscrMin).
+
+    Implementation mirrors the validated HiForest full-had skim
+    (forest_miniAOD_ParticleTransformer_run3_SKIM_FULLHAD_DATA.py): an
+    unbiased >= nJets precount on the bare patJetsAKCs3PF (raw pT at the
+    15 GeV clustering threshold) keeps the b-tag inference off for most
+    events. NB embedded discriminators carry the UN-postfixed tagger names
+    (pfUnifiedParticleTransformerAK4JetTags:*). Measured on 2025 PbPb data
+    (HiForest twin, run 400059): ~8e-5 pass rate, all 0-5% central.
+
+    The skim gates the scheduled nano tables (filters prepended to
+    nanoAOD_step) and the NanoAOD output (SelectEvents on nanoAOD_step);
+    task-resident HI tables are gated automatically through the output
+    module prefetch.
+    """
+    # make sure the akCs3PF chain with b-tagging (UParT incl. ptcorr) and its
+    # table exist; addHIJets is a no-op without HeavyIonsAnalysis in the area
+    if not hasattr(process, "selectedUpdatedPatJetsAK3PFBtag"):
+        addHIJets(process, labels=("3",), doBtagging=True)
+    if not hasattr(process, "selectedUpdatedPatJetsAK3PFBtag"):
+        raise RuntimeError(
+            "addFullHadSkim: akCs3 jet chain unavailable - check out "
+            "HeavyIonsAnalysis/JetAnalysis (forest branch) in this area.")
+
+    # pin the skim to the forest's 2024 PbPb UParT training so scores (and the
+    # measured skim rate) are identical to the HiForest full-had skim twin; the
+    # central cms-data 2023 model regresses jets ~35% higher at low pT
+    # (ptcorr median 0.80 vs 0.58 on 2025 data), which would loosen the pT cut
+    uparTModel = "HeavyIonsAnalysis/Configuration/data/PbPb_AK3_2024_v6.onnx"
+    for m in ("pfUnifiedParticleTransformerAK4JetTagsAK3PFBtag",
+              "pfNegativeUnifiedParticleTransformerAK4JetTagsAK3PFBtag"):
+        if hasattr(process, m):
+            getattr(process, m).model_path = uparTModel
+
+    uparT = "pfUnifiedParticleTransformerAK4JetTags"
+    uparTB = "+".join("bDiscriminator('%s:%s')" % (uparT, x)
+                      for x in ("probb", "probbb", "problepb"))
+    uparTAll = uparTB + "+" + "+".join("bDiscriminator('%s:%s')" % (uparT, x)
+                                       for x in ("probc", "probs", "probu", "probd", "probg"))
+    uparTPt = "correctedJet('Uncorrected').pt * bDiscriminator('%s:ptcorr')" % uparT
+
+    # cheap unbiased precount on the bare subtracted jets (threshold = clustering pT min)
+    process.fullHadPreJets = cms.EDFilter("PATJetSelector",
+        src = cms.InputTag("patJetsAKCs3PF"),
+        cut = cms.string("correctedJet('Uncorrected').pt >= 15.0 && abs(eta) <= 2.6"))
+    process.fullHadPreJetCount = cms.EDFilter("CandViewCountFilter",
+        src = cms.InputTag("fullHadPreJets"), minNumber = cms.uint32(nJets))
+
+    # jet counting on the UParT-regressed pT (offline: jtupartpt = jtrawPt * ptcorr)
+    process.fullHadJets = cms.EDFilter("PATJetSelector",
+        src = cms.InputTag("selectedUpdatedPatJetsAK3PFBtag"),
+        cut = cms.string("(%s) >= %g && abs(eta) <= %g" % (uparTPt, jetPtMin, jetAbsEta)))
+    process.fullHadJetCount = cms.EDFilter("CandViewCountFilter",
+        src = cms.InputTag("fullHadJets"), minNumber = cms.uint32(nJets))
+
+    _seq = process.fullHadJets * process.fullHadJetCount
+    if requireBTags:
+        process.fullHadBJets = cms.EDFilter("PATJetSelector",
+            src = cms.InputTag("fullHadJets"),
+            cut = cms.string("(%s) > 0 && (%s)/(%s) >= %g" % (uparTB, uparTB, uparTAll, bDiscrMin)))
+        process.fullHadBJetCount = cms.EDFilter("CandViewCountFilter",
+            src = cms.InputTag("fullHadBJets"), minNumber = cms.uint32(nBJets))
+        _seq = _seq * process.fullHadBJets * process.fullHadBJetCount
+    if usePreCount:
+        _seq = process.fullHadPreJets * process.fullHadPreJetCount * _seq
+    process.fullHadSkimSequence = cms.Sequence(_seq)
+
+    # gate the scheduled nano tables and skim the output
+    if hasattr(process, "nanoAOD_step"):
+        process.nanoAOD_step._seq = process.fullHadSkimSequence * process.nanoAOD_step._seq
+    for out in process.outputModules_().values():
+        if out.type_() == "NanoAODOutputModule":
+            out.SelectEvents = cms.untracked.PSet(SelectEvents = cms.vstring("nanoAOD_step"))
     return process
 
 

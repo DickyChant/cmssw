@@ -32,6 +32,7 @@
 #include "FWCore/ParameterSet/interface/ConfigurationDescriptions.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 #include "FWCore/ParameterSet/interface/ParameterSetDescription.h"
+#include "FWCore/Utilities/interface/Exception.h"
 #include "FWCore/Utilities/interface/InputTag.h"
 
 #include "DataFormats/Common/interface/View.h"
@@ -68,6 +69,8 @@ private:
   const bool useQuality_;
   const bool doHiJetID_;
   const bool doWTARecluster_;
+  const std::vector<std::string> discTags_;
+  const std::vector<std::string> discNames_;
   const fastjet::JetDefinition wtaJetDef_;
 };
 
@@ -86,7 +89,11 @@ HiInclusiveJetTableProducer::HiInclusiveJetTableProducer(const edm::ParameterSet
       useQuality_(iConfig.getParameter<bool>("useQuality")),
       doHiJetID_(iConfig.getParameter<bool>("doHiJetID")),
       doWTARecluster_(iConfig.getParameter<bool>("doWTARecluster")),
+      discTags_(iConfig.getParameter<std::vector<std::string>>("discriminatorTags")),
+      discNames_(iConfig.getParameter<std::vector<std::string>>("discriminatorNames")),
       wtaJetDef_(fastjet::antikt_algorithm, 2, fastjet::WTA_pt_scheme) {
+  if (discTags_.size() != discNames_.size())
+    throw cms::Exception("Configuration") << "discriminatorTags and discriminatorNames differ in size";
   produces<nanoaod::FlatTable>();
 }
 
@@ -106,6 +113,8 @@ void HiInclusiveJetTableProducer::produce(edm::Event& iEvent, const edm::EventSe
   std::vector<int> trackN, trackHardN, chargedN, chargedHardN, photonN, photonHardN, neutralN, eN, muN;
   // WTA axis
   std::vector<float> wtaEta, wtaPhi;
+  // embedded b-tag / regression discriminators
+  std::vector<std::vector<float>> discVals(discTags_.size());
 
   const auto trackQual = reco::TrackBase::qualityByName(trackQuality_);
   reco::PFCandidate pdgConverter;  // for translatePdgIdToType
@@ -115,6 +124,8 @@ void HiInclusiveJetTableProducer::produce(edm::Event& iEvent, const edm::EventSe
       continue;
 
     rawPt.push_back(jet.correctedJet("Uncorrected").pt());
+    for (size_t d = 0; d < discTags_.size(); ++d)
+      discVals[d].push_back(jet.bDiscriminator(discTags_[d]));
     pt.push_back(jet.pt());
     eta.push_back(jet.eta());
     phi.push_back(jet.phi());
@@ -316,6 +327,8 @@ void HiInclusiveJetTableProducer::produce(edm::Event& iEvent, const edm::EventSe
   out->addColumn<float>("muMax", muMax, "max pt muon within dR<rParam", p);
   out->addColumn<float>("muSum", muSum, "sum pt muons within dR<rParam", p);
   out->addColumn<int>("muN", muN, "number of muons within dR<rParam");
+  for (size_t d = 0; d < discTags_.size(); ++d)
+    out->addColumn<float>(discNames_[d], discVals[d], "embedded discriminator " + discTags_[d], p);
   if (doWTARecluster_) {
     out->addColumn<float>("WTAeta", wtaEta, "Winner-Take-All reclustered jet eta", p);
     out->addColumn<float>("WTAphi", wtaPhi, "Winner-Take-All reclustered jet phi", p);
@@ -338,6 +351,8 @@ void HiInclusiveJetTableProducer::fillDescriptions(edm::ConfigurationDescription
   desc.add<bool>("useQuality", true);
   desc.add<bool>("doHiJetID", true);
   desc.add<bool>("doWTARecluster", true);
+  desc.add<std::vector<std::string>>("discriminatorTags", {});
+  desc.add<std::vector<std::string>>("discriminatorNames", {});
   descriptions.addWithDefaultLabel(desc);
 }
 

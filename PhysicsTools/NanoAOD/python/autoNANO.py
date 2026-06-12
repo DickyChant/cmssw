@@ -111,6 +111,10 @@ autoNANO = {
     # HINHAD: hadronic heavy-ion events (full centrality incl. hiBin)
     'HINHAD': {'sequence': '@PHYS',
                'customize': '@PHYS+PhysicsTools/NanoAOD/custom_hin_cff.HINHADCustomNanoAOD'},
+    # HINHADSKIM: HINHAD + fully hadronic ttbar multijet skim (>=5 akCs3PF jets
+    # with UParT-regressed pT >= 25 GeV; see custom_hin_cff.addFullHadSkim)
+    'HINHADSKIM': {'sequence': '@PHYS',
+                   'customize': '@PHYS+PhysicsTools/NanoAOD/custom_hin_cff.HINHADCustomNanoAOD+PhysicsTools/NanoAOD/custom_hin_cff.addFullHadSkim'},
     # NANOGEN (from LHE/GEN/AOD)
     'GEN': {'sequence': 'PhysicsTools/NanoAOD/nanogen_cff.nanogenSequence',
             'customize': 'PhysicsTools/NanoAOD/nanogen_cff.customizeNanoGEN'},
