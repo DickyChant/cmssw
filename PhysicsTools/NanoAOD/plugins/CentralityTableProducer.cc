@@ -48,6 +48,7 @@ private:
   const std::string doc_;
   const int precision_;
   const edm::EDGetTokenT<reco::Centrality> centralityToken_;
+  const std::vector<double> table_;  // if non-empty (201 edges): recompute hiBin in-process from EtHFtowerSum
   bool hasBin_;
   edm::EDGetTokenT<int> binToken_;
 };
@@ -56,7 +57,8 @@ CentralityTableProducer::CentralityTableProducer(const edm::ParameterSet& iConfi
     : name_(iConfig.getParameter<std::string>("name")),
       doc_(iConfig.getParameter<std::string>("doc")),
       precision_(iConfig.getParameter<int>("precision")),
-      centralityToken_(consumes<reco::Centrality>(iConfig.getParameter<edm::InputTag>("src"))) {
+      centralityToken_(consumes<reco::Centrality>(iConfig.getParameter<edm::InputTag>("src"))),
+      table_(iConfig.getParameter<std::vector<double>>("table")) {
   const auto binTag = iConfig.getParameter<edm::InputTag>("srcBin");
   hasBin_ = !binTag.label().empty();
   if (hasBin_)
@@ -68,19 +70,30 @@ void CentralityTableProducer::produce(edm::Event& iEvent, const edm::EventSetup&
   auto out = std::make_unique<nanoaod::FlatTable>(1, name_, /*singleton=*/true, /*extension=*/false);
   out->setDoc(doc_);
 
+  edm::Handle<reco::Centrality> cenHandle;
+  iEvent.getByToken(centralityToken_, cenHandle);
+  const bool ok = cenHandle.isValid();
+  const int p = precision_;
+
+  // hiBin: recompute in-process from the table on EtHFtowerSum (same lookup as
+  // HeavyIonsAnalysis HICentralityBinProducer) when a table is given; otherwise
+  // take the precomputed srcBin (PromptReco). The table path keeps GO_hiBin in
+  // sync with the forest hiBin (the file's PromptReco bin is ~11 bins off).
   int hiBin = -1;
-  if (hasBin_) {
+  if (!table_.empty() && ok) {
+    const double value = cenHandle->EtHFtowerSum();
+    for (size_t i = 0; i < table_.size() - 1; i++)
+      if (value >= table_[table_.size() - 2 - i]) {
+        hiBin = static_cast<int>(i);
+        break;
+      }
+  } else if (hasBin_) {
     edm::Handle<int> binHandle;
     iEvent.getByToken(binToken_, binHandle);
     if (binHandle.isValid())
       hiBin = *binHandle;
   }
   out->addColumnValue<int>("hiBin", hiBin, "Centrality bin (0-199, 0.5% bins of HFtowers); -1 if not computed (e.g. UPC)");
-
-  edm::Handle<reco::Centrality> cenHandle;
-  iEvent.getByToken(centralityToken_, cenHandle);
-  const bool ok = cenHandle.isValid();
-  const int p = precision_;
 
   // member-function pointers: the reco::Centrality method is only evaluated when
   // the handle is valid, so we never read an uninitialized object.
@@ -140,7 +153,9 @@ void CentralityTableProducer::fillDescriptions(edm::ConfigurationDescriptions& d
   desc.add<edm::InputTag>("src", edm::InputTag("hiCentrality"))
       ->setComment("reco::Centrality collection (event activity / HF / ZDC sums)");
   desc.add<edm::InputTag>("srcBin", edm::InputTag("centralityBin", "HFtowers"))
-      ->setComment("int centrality bin; leave the label empty to skip (e.g. UPC)");
+      ->setComment("int centrality bin (used only when 'table' is empty); leave the label empty to skip (e.g. UPC)");
+  desc.add<std::vector<double>>("table", {})
+      ->setComment("centrality bin edges (201 -> 200 bins); if given, hiBin is recomputed in-process from EtHFtowerSum");
   desc.add<std::string>("name", "Cent")->setComment("name of the flat table / branch prefix");
   desc.add<std::string>("doc", "Heavy-ion event-activity (centrality) information");
   desc.add<int>("precision", 10)->setComment("mantissa bits for float columns");

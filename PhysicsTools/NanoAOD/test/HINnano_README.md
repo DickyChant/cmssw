@@ -60,8 +60,22 @@ flavour itself targets `slimmedJetsPuppi`, absent in HI MiniAOD). With
 `doBtagging=True` the taginfo cone (`jet_radius`, IP `maxDeltaR`) now follows
 the actual jet radius (it was silently 0.4 for all radii before).
 
-Requires `HeavyIonsAnalysis/JetAnalysis` (forest branch) checked out in the
-same area, like the HINHAD jet tables.
+**Self-contained**: the HINHAD/HINHADSKIM nano route needs no other packages.
+Everything it used to import from `HeavyIonsAnalysis` is vendored into
+`PhysicsTools/NanoAOD`:
+* `python/hi_setupJets_PbPb_cff.py` - the akCs constituent-subtracted jet reco
+  + UParT b-tagging (pure-central modules; was `HeavyIonsAnalysis/JetAnalysis`);
+* `plugins/TrackAndVertexUnpacker.cc` - the `unpackedTracksAndVertices` producer
+  for the Trk/Vtx tables (was `HeavyIonsAnalysis/TrackAnalysis`);
+* `python/hiCentralityBinTable2025_cff.py` - the 2025 recalibrated centrality
+  bin edges; `CentralityTableProducer` recomputes `GO_hiBin` from them in-process
+  (folded in - no separate `HICentralityBinProducer`, was
+  `HeavyIonsAnalysis/EventAnalysis`);
+* `data/PbPb_AK3_2024_v6.onnx` - the pinned UParT model.
+
+So a single `git cms-rebase-topic DickyChant:hin_nanoaod_15_1_X` (or
+`cms-merge-topic`) checks out one package, `PhysicsTools/NanoAOD`, and builds
+the full route - no forest branch needed.
 
 ```bash
 cmsDriver.py hin_fullhad_nano -s NANO:@HINHADSKIM --data --era Run3_pp_on_PbPb \

@@ -189,25 +189,18 @@ def addCentralityTable(process, addBin=True):
     addBin=True  -> full centrality table including the integer hiBin (HINHAD).
     addBin=False -> HF / ZDC sums only, no centrality bin (HINUPC).
 
-    When HeavyIonsAnalysis is present in the area (forest branch), the hiBin is
-    recomputed in-process with the 2025 recalibrated table
-    (HeavyIonsAnalysis.EventAnalysis.hiCentralityBin2025_cfi) instead of taking
-    the PromptReco bin from the file - the two differ by ~11 bins (~5.5%
-    centrality) on 2025 data. The in-process product wins the InputTag
-    resolution, so GO_hiBin then matches the forest hiBin exactly.
+    For HINHAD the hiBin is recomputed in-process by CentralityTableProducer
+    itself from the 2025 recalibrated table (hiCentralityBinTable2025_cff), the
+    same EtHFtowerSum lookup as the forest's HICentralityBinProducer, instead of
+    the PromptReco bin in the file - the two differ by ~11 bins (~5.5%
+    centrality) on 2025 data. So GO_hiBin matches the forest hiBin, with no
+    separate producer and no HeavyIonsAnalysis dependency.
     """
     process.centralityTable = (centralityTable if addBin else hfTable).clone()
-    mods = [process.centralityTable]
     if addBin:
-        try:
-            from HeavyIonsAnalysis.EventAnalysis.hiCentralityBin2025_cfi import centralityBin2025
-            process.centralityBin = centralityBin2025.clone()
-            mods.insert(0, process.centralityBin)
-            print("[custom_hin_cff] GO_hiBin recomputed in-process (2025 recalibrated table)")
-        except ImportError:
-            print("[custom_hin_cff] HeavyIonsAnalysis not in this area -> "
-                  "GO_hiBin = PromptReco centralityBin from the input file")
-    process.centralityTableTask = cms.Task(*mods)
+        from PhysicsTools.NanoAOD.hiCentralityBinTable2025_cff import hiCentralityBinTable2025
+        process.centralityTable.table = hiCentralityBinTable2025
+    process.centralityTableTask = cms.Task(process.centralityTable)
     _associate(process, process.centralityTableTask)
     return process
 
@@ -217,15 +210,15 @@ def addHIJets(process, labels=("4", "4Flow"), doBtagging=False, jetPtMin=15.0):
     and flow-subtracted akCsFlow PF jets) from the forest setup, and tabulate the
     resulting pat::Jets as NanoAOD FlatTables via HiInclusiveJetTableProducer.
 
-    Reuses HeavyIonsAnalysis.JetAnalysis.setupJets_PbPb_cff.candidateBtaggingMiniAOD
+    Reuses PhysicsTools.NanoAOD.hi_setupJets_PbPb_cff.candidateBtaggingMiniAOD
     (the same reco the forest config runs). On a plain CMSSW area without the forest
     package this is a no-op (so HINHAD still imports on the non-forest branch).
     """
     try:
-        from HeavyIonsAnalysis.JetAnalysis.setupJets_PbPb_cff import candidateBtaggingMiniAOD
+        from PhysicsTools.NanoAOD.hi_setupJets_PbPb_cff import candidateBtaggingMiniAOD
     except ImportError:
         print("[custom_hin_cff] HeavyIonsAnalysis jet setup not found -> skipping HI jets. "
-              "Use the forest+nano branch (hin_nanoaod_hadronic_*) for HINHAD jets.")
+              "This should not happen on the self-contained nano branch.")
         return process
 
     # data vs MC: is the MC nano sequence actually scheduled? (same check BTVNano uses)
@@ -289,7 +282,7 @@ def addHITracks(process):
     TrackAndVertexUnpacker) and tabulate them as the Trk + Vtx FlatTables.
     No-op if the forest TrackAnalysis package is absent."""
     try:
-        from HeavyIonsAnalysis.TrackAnalysis.unpackedTracksAndVertices_cfi import unpackedTracksAndVertices
+        from PhysicsTools.NanoAOD.unpackedTracksAndVertices_cfi import unpackedTracksAndVertices
     except ImportError:
         print("[custom_hin_cff] HeavyIonsAnalysis TrackAnalysis not found -> skipping HI tracks.")
         return process
@@ -486,7 +479,7 @@ def addFullHadSkim(process,
     # measured skim rate) are identical to the HiForest full-had skim twin; the
     # central cms-data 2023 model regresses jets ~35% higher at low pT
     # (ptcorr median 0.80 vs 0.58 on 2025 data), which would loosen the pT cut
-    uparTModel = "HeavyIonsAnalysis/Configuration/data/PbPb_AK3_2024_v6.onnx"
+    uparTModel = "PhysicsTools/NanoAOD/data/PbPb_AK3_2024_v6.onnx"
     for m in ("pfUnifiedParticleTransformerAK4JetTagsAK3PFBtag",
               "pfNegativeUnifiedParticleTransformerAK4JetTagsAK3PFBtag"):
         if hasattr(process, m):
