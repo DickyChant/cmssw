@@ -120,6 +120,11 @@ public:
   /// 0 : not yet propagated
   inline int onVFcal() const { return vfcal; }
 
+  /// The particle was propagated to the HGCAL (CE-E) front face
+  /// 2 : on the EndCaps (HGCAL has no barrel); 3 : no propagation possible
+  /// 0 : not yet propagated. Phase-2 only; zero in Run-2/3 geometries.
+  inline int onHGCal() const { return hgcal; }
+
   /// The particle was propagated to the HCAL back face
   /// 1 : on the barrel; 2 : on the EndCaps; 3 : no propagation possible
   /// 0 : not yet propagated
@@ -147,6 +152,9 @@ public:
 
   /// The particle at VFCAL entrance
   inline const RawParticle& vfcalEntrance() const { return VFCAL_Entrance; }
+
+  /// The particle at the HGCAL (CE-E) entrance
+  inline const RawParticle& hgcalEntrance() const { return HGCAL_Entrance; }
 
   /// The particle at HCAL exir
   inline const RawParticle& hcalExit() const { return HCAL_Exit; }
@@ -183,6 +191,9 @@ public:
 
   /// Set the hcal variables
   void setVFcal(const RawParticle& pp, int success);
+
+  /// Set the particle at the HGCAL entrance
+  void setHGCal(const RawParticle& pp, int success);
 
   /// Set the hcal exit variables
   void setHcalExit(const RawParticle& pp, int success);
@@ -233,6 +244,7 @@ private:
   int ecal;      // 1 if the particle was propagated to ECAL/HCAL barrel
   int hcal;      // 2 if the particle was propagated to ECAL/HCAL endcap
   int vfcal;     // 1 if the particle was propagated to VFCAL
+  int hgcal;     // 2 if the particle was propagated to the HGCAL front face
   int hcalexit;  // 2 if the particle was propagated to HCAL Exit point
   int hoentr;    // 1 if the particle was propagated to HO
 
@@ -243,6 +255,7 @@ private:
   RawParticle ECAL_Entrance;    // the particle at ECAL entrance
   RawParticle HCAL_Entrance;    // the particle at HCAL entrance
   RawParticle VFCAL_Entrance;   // the particle at VFCAL entrance
+  RawParticle HGCAL_Entrance;   // the particle at HGCAL (CE-E) entrance
   RawParticle HCAL_Exit;        // the particle at HCAL ezit point
   RawParticle HO_Entrance;      // the particle at HO entrance
 

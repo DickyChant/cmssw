@@ -209,9 +209,11 @@ std::unique_ptr<fastsim::SimplifiedGeometry> fastsim::SimplifiedGeometryFactory:
       layer->setCaloType(SimplifiedGeometry::HCAL);
     } else if (caloType == "VFCAL") {
       layer->setCaloType(SimplifiedGeometry::VFCAL);
+    } else if (caloType == "HGCAL") {
+      layer->setCaloType(SimplifiedGeometry::HGCAL);
     } else {
       throw cms::Exception("fastsim::SimplifiedGeometryFactory")
-          << "unknown caloType '" << caloType << "' (defined PRESHOWER1, PRESHOWER2, ECAL, HCAL, VFCAL)";
+          << "unknown caloType '" << caloType << "' (defined PRESHOWER1, PRESHOWER2, ECAL, HCAL, VFCAL, HGCAL)";
     }
   }
 

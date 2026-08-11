@@ -80,6 +80,9 @@ DetId CaloGeometryHelper::getClosestCell(const XYZPoint& point, bool ecal, bool 
       Histos::instance()->fill("h100", point.eta(), sqrt(deltaeta2 + deltaphi2));
 #endif
     } else {
+      // Phase-2: no endcap ECAL. Callers must route |eta| > 1.5 to HGCAL.
+      if (EcalEndcapGeometry_ == nullptr)
+        return DetId();
       result = EcalEndcapGeometry_->getClosestCell(GlobalPoint(point.X(), point.Y(), point.Z()));
 #ifdef DEBUGGCC
       if (result.null()) {
@@ -139,6 +142,9 @@ void CaloGeometryHelper::buildCrystal(const DetId& cell, Crystal& xtal) const {
     return;
   }
   if (cell.subdetId() == EcalEndcap) {
+    // endcapCrystals_ is empty in Phase-2 (HGCAL replaces the endcap ECAL)
+    if (endcapCrystals_.empty())
+      return;
     xtal = Crystal(cell, &endcapCrystals_[EEDetId(cell).hashedIndex()]);
     return;
   }
@@ -194,6 +200,12 @@ void CaloGeometryHelper::buildNeighbourArray() {
   }
 
   // Moved to the endcap
+
+  // Phase-2: no endcap ECAL (HGCAL replaces it) -- nothing to cache here.
+  if (EcalEndcapGeometry_ == nullptr || EcalEndcapTopology_ == nullptr) {
+    LogDebug("CaloGeometryTools") << "No endcap ECAL geometry/topology: skipping endcap neighbours";
+    return;
+  }
 
   const std::vector<DetId>& vece(EcalEndcapGeometry_->getValidDetIds(DetId::Ecal, EcalEndcap));
   size = vece.size();
@@ -371,6 +383,13 @@ void CaloGeometryHelper::buildCrystalArray() {
     BaseCrystal xtal(vec[ic]);
     xtal.setCorners(geom->getCorners(), geom->getPosition());
     barrelCrystals_[hashedindex] = xtal;
+  }
+
+  // In Phase-2 the endcap ECAL is replaced by HGCAL, so EcalEndcapGeometry_ is
+  // null. Leave endcapCrystals_ empty rather than dereferencing it.
+  if (EcalEndcapGeometry_ == nullptr) {
+    LogDebug("CaloGeometryTools") << "No endcap ECAL geometry: skipping endcap crystal array";
+    return;
   }
 
   const std::vector<DetId>& vece(EcalEndcapGeometry_->getValidDetIds(DetId::Ecal, EcalEndcap));

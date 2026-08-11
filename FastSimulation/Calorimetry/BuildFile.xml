@@ -11,6 +11,7 @@
 <use name="FastSimulation/MaterialEffects"/>
 <use name="FastSimulation/ParticlePropagator"/>
 <use name="Geometry/HcalTowerAlgo"/>
+<use name="Geometry/HGCalCommonData"/>
 <export>
   <lib name="1"/>
 </export>

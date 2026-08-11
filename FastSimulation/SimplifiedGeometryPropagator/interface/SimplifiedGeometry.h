@@ -56,7 +56,7 @@ namespace fastsim {
     ////////
 
     //! Hack to interface "old" Calorimetry with "new" Tracker
-    enum CaloType { NONE, TRACKERBOUNDARY, PRESHOWER1, PRESHOWER2, ECAL, HCAL, VFCAL };
+    enum CaloType { NONE, TRACKERBOUNDARY, PRESHOWER1, PRESHOWER2, ECAL, HCAL, VFCAL, HGCAL };
 
     //! Hack to interface "old" Calorimetry with "new" Tracker
     CaloType getCaloType() const { return caloType_; }

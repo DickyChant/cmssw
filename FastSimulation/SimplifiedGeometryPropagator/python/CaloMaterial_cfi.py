@@ -110,4 +110,39 @@ CaloMaterialBlock = cms.PSet(
     
 if hasattr(TrackerMaterialBlock.TrackerMaterial, 'magneticFieldZ'):
     CaloMaterialBlock.CaloMaterial.magneticFieldZ = TrackerMaterialBlock.TrackerMaterial.magneticFieldZ
+
+#############
+### Phase-2: HGCAL replaces the endcap ECAL, the preshower and the endcap HCAL.
+### Leaving the Run-2 endcap layers in place would flag particles as onEcal()==2
+### and send them into the PbWO4 + preshower path, whose geometry is null in
+### Phase-2. So the whole endcap set is replaced.
+###
+### Geometry (V16 / GeometryExtendedRun4D110), from the DetId LUT:
+###   CE-E front face  z = 322.1 cm,  CE-H back face  z = 513.3 cm
+### The radial limits follow 1.5 < |eta| < 3.0 at the CE-E front face:
+###   r = z / sinh(eta):  eta=3.0 -> 32.1 cm,  eta=1.5 -> 151.3 cm
+#############
+
+from Configuration.Eras.Modifier_phase2_hgcal_cff import phase2_hgcal
+
+_hgcalEndcapLayers = cms.VPSet(
+    ########### HGCAL CE-E front face ###########
+    cms.PSet(
+        z = cms.untracked.double(322.1),
+        limits = cms.untracked.vdouble(31.5, 152.0),
+        thickness = cms.untracked.vdouble(1.),
+        interactionModels = cms.untracked.vstring(),
+        caloType = cms.untracked.string("HGCAL")
+    ),
+    ########### VFCAL (end of detector; keeps the propagation terminating) ###########
+    cms.PSet(
+        z = cms.untracked.double(1110.0),
+        limits = cms.untracked.vdouble(12.2, 110.9),
+        thickness = cms.untracked.vdouble(1.),
+        interactionModels = cms.untracked.vstring(),
+        caloType = cms.untracked.string("VFCAL")
+    ),
+)
+
+phase2_hgcal.toModify(CaloMaterialBlock.CaloMaterial, EndcapLayers = _hgcalEndcapLayers)
     

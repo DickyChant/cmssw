@@ -17,6 +17,7 @@ FSimTrack::FSimTrack()
       ecal(0),
       hcal(0),
       vfcal(0),
+      hgcal(0),
       hcalexit(0),
       hoentr(0),
       prop(false),
@@ -38,6 +39,7 @@ FSimTrack::FSimTrack(const RawParticle* p, int iv, int ig, int id, FBaseSimEvent
       ecal(0),
       hcal(0),
       vfcal(0),
+      hgcal(0),
       hcalexit(0),
       hoentr(0),
       prop(false),
@@ -69,6 +71,7 @@ FSimTrack::FSimTrack(int ipart,
       ecal(0),
       hcal(0),
       vfcal(0),
+      hgcal(0),
       hcalexit(0),
       hoentr(0),
       prop(false),
@@ -127,6 +130,11 @@ void FSimTrack::setHcal(const RawParticle& pp, int success) {
 }
 
 /// Set the vcal variables
+void FSimTrack::setHGCal(const RawParticle& pp, int success) {
+  HGCAL_Entrance = pp;
+  hgcal = success;
+}
+
 void FSimTrack::setVFcal(const RawParticle& pp, int success) {
   VFCAL_Entrance = pp;
   vfcal = success;

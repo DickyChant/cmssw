@@ -3,6 +3,7 @@
 <use name="DataFormats/HcalDetId"/>
 <use name="DataFormats/Math"/>
 <use name="SimG4CMS/Calo"/>
+<use name="SimDataFormats/CaloHit"/>
 <use name="FastSimulation/CaloGeometryTools"/>
 <use name="FastSimulation/CalorimeterProperties"/>
 <use name="FastSimulation/Event"/>

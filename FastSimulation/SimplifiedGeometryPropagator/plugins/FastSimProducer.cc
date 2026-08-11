@@ -217,6 +217,9 @@ FastSimProducer::FastSimProducer(const edm::ParameterSet& iConfig)
   produces<edm::PCaloHitContainer>("EcalHitsEE");
   produces<edm::PCaloHitContainer>("EcalHitsES");
   produces<edm::PCaloHitContainer>("HcalHits");
+  // Phase-2 HGCAL. The instance label matches FullSim g4SimHits so HGCDigitizer
+  // consumes it unchanged; empty unless HGCAL simulation is configured.
+  produces<edm::PCaloHitContainer>("HGCHitsEE");
   produces<edm::SimTrackContainer>("MuonSimTracks");
 }
 
@@ -408,6 +411,7 @@ void FastSimProducer::produce(edm::StreamID id, edm::Event& iEvent, const edm::E
   iEvent.put(std::move(caloProducts->hitsEE), "EcalHitsEE");
   iEvent.put(std::move(caloProducts->hitsES), "EcalHitsES");
   iEvent.put(std::move(caloProducts->hitsHCAL), "HcalHits");
+  iEvent.put(std::move(caloProducts->hitsHGCEE), "HGCHitsEE");
   iEvent.put(std::move(caloProducts->tracksMuon), "MuonSimTracks");
 }
 
@@ -467,6 +471,10 @@ void FastSimProducer::createFSimTrack(fastsim::Particle* particle,
         if (!myFSimTrack.onVFcal()) {
           myFSimTrack.setVFcal(PP, 0);
         }
+      } else if (caloLayer->getCaloType() == fastsim::SimplifiedGeometry::HGCAL) {
+        if (!myFSimTrack.onHGCal()) {
+          myFSimTrack.setHGCal(PP, 0);
+        }
       }
 
       // not necessary to continue propagation
@@ -525,6 +533,14 @@ void FastSimProducer::createFSimTrack(fastsim::Particle* particle,
     if (caloLayer->getCaloType() == fastsim::SimplifiedGeometry::VFCAL) {
       if (!myFSimTrack.onVFcal()) {
         myFSimTrack.setVFcal(PP, abs(success));
+      }
+    }
+
+    // Phase-2: HGCAL replaces the endcap ECAL. The layer is only present when the
+    // HGCAL entrance layers are configured, so this is inert in Run-2/3 geometries.
+    if (caloLayer->getCaloType() == fastsim::SimplifiedGeometry::HGCAL) {
+      if (!myFSimTrack.onHGCal()) {
+        myFSimTrack.setHGCal(PP, abs(success));
       }
     }
 

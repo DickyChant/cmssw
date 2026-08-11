@@ -291,3 +291,13 @@ FamosCalorimetryBlock.Calorimetry.ECAL.Digitizer = True
 FamosCalorimetryBlock.Calorimetry.HCAL.Digitizer = True
 
 from Configuration.Eras.Modifier_run2_common_cff import run2_common
+
+##############################################################################
+# Phase-2: attach the HGCAL CE-E block. CalorimetryManager only looks for
+# "HGCal" and only builds the HGCAL objects when simulateHGCal is True, so this
+# is inert in Run-2/3 workflows.
+##############################################################################
+from Configuration.Eras.Modifier_phase2_hgcal_cff import phase2_hgcal
+from FastSimulation.Calorimetry.HGCalFastSim_cff import HGCalBlock
+
+phase2_hgcal.toModify(FamosCalorimetryBlock.Calorimetry, HGCal = HGCalBlock)

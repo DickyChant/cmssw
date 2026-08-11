@@ -10,6 +10,8 @@
 #include "Geometry/Records/interface/CaloGeometryRecord.h"
 #include "Geometry/Records/interface/CaloTopologyRecord.h"
 #include "Geometry/Records/interface/HcalSimNumberingRecord.h"
+#include "Geometry/Records/interface/IdealGeometryRecord.h"
+#include "Geometry/HGCalCommonData/interface/HGCalDDDConstants.h"
 #include "SimGeneral/HepPDTRecord/interface/ParticleDataTable.h"
 
 struct CalorimetryConsumer {
@@ -20,6 +22,11 @@ struct CalorimetryConsumer {
   edm::ESGetToken<CaloTopology, CaloTopologyRecord> caloTopologyESToken;
   edm::ESGetToken<HcalDDDSimConstants, HcalSimNumberingRecord> hcalDDDSimConstantsESToken;
   edm::ESGetToken<HcalSimulationConstants, HcalSimNumberingRecord> hcalSimulationConstantsESToken;
+
+  /// HGCAL CE-E constants. Present in every geometry the token is created for,
+  /// but only actually retrieved when HGCAL simulation is switched on -- getting
+  /// it unconditionally would break Run-2/3 workflows that have no HGCAL.
+  edm::ESGetToken<HGCalDDDConstants, IdealGeometryRecord> hgcalEEESToken;
 };
 
 #endif

@@ -7,6 +7,10 @@
 // Fast Simulation headers
 #include "FastSimulation/ParticlePropagator/interface/ParticlePropagator.h"
 #include "FastSimulation/Calorimetry/interface/CalorimetryManager.h"
+#include "FastSimulation/CaloGeometryTools/interface/HGCalFastGeometry.h"
+#include "FastSimulation/CalorimeterProperties/interface/HGCalProperties.h"
+#include "FastSimulation/ShowerDevelopment/interface/HGCalGFlashModel.h"
+#include "FastSimulation/CaloHitMakers/interface/HGCalHitMaker.h"
 #include "FastSimulation/Event/interface/FSimEvent.h"
 #include "FastSimulation/Event/interface/FSimTrack.h"
 #include "FastSimulation/ShowerDevelopment/interface/EMECALShowerParametrization.h"
@@ -118,6 +122,24 @@ CalorimetryManager::CalorimetryManager(const edm::ParameterSet& fastCalo,
 
   pdt_ = &iSetup.getData(iConsumer.particleDataTableESToken);
 
+  // ---- HGCAL (Phase-2) -----------------------------------------------------
+  // Built only when the configuration asks for it, so Run-2/3 workflows are
+  // untouched and never retrieve the HGCAL EventSetup products.
+  if (fastCalo.exists("HGCal")) {
+    const edm::ParameterSet hgc = fastCalo.getParameter<edm::ParameterSet>("HGCal");
+    simulateHGCal_ = hgc.getParameter<bool>("simulateHGCal");
+    if (simulateHGCal_) {
+      const HGCalDDDConstants& ddd = iSetup.getData(iConsumer.hgcalEEESToken);
+      hgcalGeometry_ = std::make_unique<HGCalFastGeometry>(ddd, DetId::HGCalEE);
+      hgcalProperties_ = std::make_unique<HGCalProperties>(hgc);
+      hgcalShower_ = std::make_unique<HGCalGFlashModel>(hgc.getParameter<edm::ParameterSet>("ShowerParameters"),
+                                                       hgcalProperties_.get());
+      edm::LogInfo("CalorimetryManager")
+          << "HGCAL CE-E FastSim enabled: " << hgcalProperties_->nLayers() << " layers, "
+          << hgcalGeometry_->nCachedWafers() << " cached wafers";
+    }
+  }
+
   // Check if the preshower is really available
   if (simulatePreshower_ && !myCalorimeter_->preshowerPresent()) {
     edm::LogWarning("CalorimetryManager")
@@ -149,7 +171,12 @@ void CalorimetryManager::reconstructTrack(const FSimTrack& myTrack,
     // Simulate energy smearing for photon and electrons
     float charge_ = (float)(myTrack.charge());
     if (pid == 11 || pid == 22) {
-      if (myTrack.onEcal())
+      // Phase-2: particles entering the HGCAL are handled by the HGCAL shower
+      // model. onHGCal() is only ever set when the HGCAL entrance layers are
+      // configured, so the ECAL path is unchanged elsewhere.
+      if (simulateHGCal_ && myTrack.onHGCal())
+        HGCalShowerSimulation(myTrack, random, container);
+      else if (myTrack.onEcal())
         EMShowerSimulation(myTrack, random, container, state);
       else if (myTrack.onVFcal()) {
         if (useShowerLibrary_) {
@@ -972,6 +999,34 @@ std::pair<double, double> CalorimetryManager::respCorr(double p) const {
     LogInfo("FastCalorimetry") << " p, ecorr, hcorr = " << p << " " << ecorr << "  " << hcorr << std::endl;
 
   return std::make_pair(ecorr, hcorr);
+}
+
+void CalorimetryManager::HGCalShowerSimulation(const FSimTrack& myTrack,
+                                              const RandomEngineAndDistribution* random,
+                                              CaloProductContainer& container) const {
+  if (!hgcalShower_ || !hgcalGeometry_)
+    return;
+
+  const RawParticle& pp = myTrack.hgcalEntrance();
+  const double e0 = pp.e();
+  if (e0 <= 0.)
+    return;
+
+  const double pmag = pp.momentum().P();
+  if (pmag <= 0.)
+    return;
+
+  const double entry[3] = {pp.vertex().X(), pp.vertex().Y(), pp.vertex().Z()};
+  const double dir[3] = {pp.momentum().X() / pmag, pp.momentum().Y() / pmag, pp.momentum().Z() / pmag};
+
+  std::vector<HGCalShowerSpot> spots;
+  hgcalShower_->compute(e0, entry, dir, std::abs(myTrack.type()) == 22, random, spots);
+  if (spots.empty())
+    return;
+
+  HGCalHitMaker maker(hgcalGeometry_.get(), myTrack.id());
+  maker.addSpots(spots);
+  maker.fillHits(*container.hitsHGCEE);
 }
 
 void CalorimetryManager::updateECAL(

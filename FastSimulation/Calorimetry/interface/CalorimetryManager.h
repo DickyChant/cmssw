@@ -41,6 +41,9 @@ class LandauFluctuationGenerator;
 class RandomEngineAndDistribution;
 // FastHFshowerLibrary
 class FastHFShowerLibrary;
+class HGCalFastGeometry;
+class HGCalProperties;
+class HGCalGFlashModel;
 
 struct CaloProductContainer {
   CaloProductContainer()
@@ -48,12 +51,17 @@ struct CaloProductContainer {
         hitsEE(std::make_unique<edm::PCaloHitContainer>()),
         hitsES(std::make_unique<edm::PCaloHitContainer>()),
         hitsHCAL(std::make_unique<edm::PCaloHitContainer>()),
+        hitsHGCEE(std::make_unique<edm::PCaloHitContainer>()),
         tracksMuon(std::make_unique<edm::SimTrackContainer>()) {}
 
   std::unique_ptr<edm::PCaloHitContainer> hitsEB;
   std::unique_ptr<edm::PCaloHitContainer> hitsEE;
   std::unique_ptr<edm::PCaloHitContainer> hitsES;
   std::unique_ptr<edm::PCaloHitContainer> hitsHCAL;
+  /// HGCAL CE-E SimHits. Instance label "HGCHitsEE", matching FullSim g4SimHits,
+  /// so the standard HGCDigitizer consumes them unchanged. CE-H (HGCHitsHEfront /
+  /// HGCHitsHEback) is not produced yet.
+  std::unique_ptr<edm::PCaloHitContainer> hitsHGCEE;
   std::unique_ptr<edm::SimTrackContainer> tracksMuon;
 };
 
@@ -116,6 +124,12 @@ private:
   // Read the parameters
   void readParameters(const edm::ParameterSet& fastCalo);
 
+  /// HGCAL CE-E electromagnetic shower (Phase-2). Inert unless the HGCAL
+  /// geometry and parameters are configured.
+  void HGCalShowerSimulation(const FSimTrack& myTrack,
+                             const RandomEngineAndDistribution* random,
+                             CaloProductContainer& container) const;
+
   void updateECAL(
       const CaloHitMap& hitMap, int onEcal, int trackID, CaloProductContainer& container, float corr = 1.0) const;
   void updateHCAL(const CaloHitMap& hitMap,
@@ -132,6 +146,12 @@ private:
 
 private:
   std::unique_ptr<CaloGeometryHelper> myCalorimeter_;
+
+  // HGCAL (Phase-2). All null when HGCAL is not configured.
+  std::unique_ptr<HGCalFastGeometry> hgcalGeometry_;
+  std::unique_ptr<HGCalProperties> hgcalProperties_;
+  std::unique_ptr<HGCalGFlashModel> hgcalShower_;
+  bool simulateHGCal_ = false;
 
   std::unique_ptr<HCALResponse> myHDResponse_;
   std::unique_ptr<HSParameters> myHSParameters_;
