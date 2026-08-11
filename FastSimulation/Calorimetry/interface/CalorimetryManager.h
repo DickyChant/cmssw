@@ -43,6 +43,7 @@ class RandomEngineAndDistribution;
 class FastHFShowerLibrary;
 class HGCalFastGeometry;
 class HGCalProperties;
+class HGCalReverseCalibration;
 class HGCalGFlashModel;
 
 struct CaloProductContainer {
@@ -150,6 +151,7 @@ private:
   // HGCAL (Phase-2). All null when HGCAL is not configured.
   std::unique_ptr<HGCalFastGeometry> hgcalGeometry_;
   std::unique_ptr<HGCalProperties> hgcalProperties_;
+  std::unique_ptr<HGCalReverseCalibration> hgcalCalibration_;
   std::unique_ptr<HGCalGFlashModel> hgcalShower_;
   bool simulateHGCal_ = false;
 

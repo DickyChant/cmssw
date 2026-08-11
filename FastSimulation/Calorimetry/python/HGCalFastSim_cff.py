@@ -50,6 +50,12 @@ hgcalShowerParameters = cms.PSet(
         # Grindhammer-Peters expects ~0.51 here). Per-event Gamma fits are needed
         # before this correlation should be trusted; the widths are also known to
         # be ~13% low because only (alpha, T) fluctuate globally.
+        # The T fit above was made on PHOTON samples, so the conversion depth is
+        # already inside tConst (that is the +0.88 X0 offset). Adding an explicit
+        # stochastic conversion on top would count it twice. Switch this on only
+        # together with an electron-based T fit.
+        applyPhotonConversion = cms.bool(False),
+
         sigmaLnAlpha = cms.double(0.419),
         sigmaLnT     = cms.double(0.257),
         rhoLnAlphaT  = cms.double(0.51),
@@ -86,19 +92,6 @@ hgcalShowerParameters = cms.PSet(
         coreFractionConst = cms.double(1.00),
     ),
 
-    Crossing = cms.PSet(
-        # Per-crossing deposit in silicon, by thickness type
-        # [HD120, LD200, LD300] (V16 has no HD200).
-        #
-        # These are NOT muon MIP values. Shower crossings are not
-        # minimum-ionising: measured on these samples, even single-crossing cells
-        # give mean/MPV = 1.74 against 1.34 for a true Landau. The MPV per unit
-        # thickness comes out at 387.9 eV/um for HD120 against the PDG 388, with
-        # no tuning, and is energy independent to <1% between 50 and 500 GeV.
-        mpvKeV        = cms.vdouble(46.55, 75.12, 101.08),
-        widthKeV      = cms.vdouble(19.89, 28.23, 40.18),
-        meanEnergyGeV = cms.double(164.2e-6),
-    ),
 )
 
 hgcalCalorimeterProperties = cms.PSet(
@@ -130,9 +123,60 @@ hgcalCalorimeterProperties = cms.PSet(
     layerX0          = cms.vdouble(_layerX0),
 )
 
+##############################################################################
+# Shower energy (deposited in the absorber) -> silicon deposit, i.e. the inverse
+# of what HGCalRecHit does. Without this the hits carry the incident energy and
+# overstate the silicon deposit by more than two orders of magnitude.
+#
+# The dE/dx weights here MUST be the ones reconstruction applies -- the
+# calcWeights-averaged V16 table -- or FastSim and reco disagree by construction.
+# This is the opposite of the w-parametrization, which needs the RAW table.
+##############################################################################
+
+def _calcWeights(w):
+    """The running two-layer average HGCalRecHit_cfi applies for V16/V19."""
+    res = [sum(p) / 2. for p in zip(w[:], w[1:] + [w[-1]])]
+    res[0] = 0.0
+    return res
+
+_weightsPerLayer_V16_raw = [0.0,
+    5.55,
+    12.86, 9.4, 12.86, 9.4, 12.86, 9.4, 12.86, 9.4, 12.86, 9.4,
+    12.86, 9.4, 12.86, 9.4, 12.86, 9.4,
+    12.86, 13.54, 12.86, 13.54, 12.86, 13.54, 12.86, 13.54, 12.86,
+    58.63,
+    60.7, 60.7, 60.7, 60.7, 60.7, 60.7, 60.7, 60.7, 60.7, 60.7,
+    83.08, 83.08, 83.43, 83.61, 83.61, 83.61, 83.61, 83.61, 83.61, 83.61]
+
+hgcalReverseCalibration = cms.PSet(
+    # MeV per MIP, indexed by layer (index 0 unused), as used by reco
+    dEdXWeights = cms.vdouble(_calcWeights(_weightsPerLayer_V16_raw)),
+
+    # V16 uses the _mean variant; [HD120, LD200, LD300]
+    fCPerMIP = cms.vdouble(2.06, 3.43, 5.15),
+    # CE-E entries of the V16 thicknessCorrection
+    thicknessCorrection = cms.vdouble(0.75, 0.76, 0.75),
+    chargeCollectionEfficiency = cms.vdouble(1.0, 1.0, 1.0),
+    keV2fC = cms.double(0.044259),
+
+    # Measured per-crossing deposit spectrum, by thickness. NOT muon MIP values:
+    # shower crossings are not minimum-ionising (mean/MPV = 1.74 vs 1.34 for a
+    # true Landau). HD120 gives 387.9 eV/um against the PDG 388, untuned, and the
+    # MPVs are energy independent to <1% between 50 and 500 GeV.
+    crossingMPVkeV   = cms.vdouble(46.55, 75.12, 101.08),
+    crossingWidthkeV = cms.vdouble(19.89, 28.23, 40.18),
+    crossingMeankeV  = cms.vdouble(86.14, 186.09, 156.99),
+
+    # Crossing multiplicity is currently approximated as Poisson, which the data
+    # says it is not (LD200: <m> = 5.6 with P(1) = 0.44 against 0.02 for Poisson).
+    # The mean deposit is unaffected; only the fluctuation shape is approximate.
+    fluctuate = cms.bool(True),
+)
+
 # The block CalorimetryManager reads.
 HGCalBlock = cms.PSet(
     simulateHGCal = cms.bool(True),
     HGCalCalorimeterProperties = hgcalCalorimeterProperties,
     ShowerParameters = hgcalShowerParameters,
+    ReverseCalibration = hgcalReverseCalibration,
 )

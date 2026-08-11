@@ -35,11 +35,10 @@
  *     projected onto the layer plane -- at eta = 2 the incidence is ~15 degrees
  *     and the in-plane footprint is an ellipse.
  *
- *  4. Per-crossing energy. Shower crossings are NOT minimum-ionising: measured
- *     on these samples even single-crossing cells give mean/MPV = 1.74 against
- *     1.34 for a true Landau. So the deposit per spot is drawn from the measured
- *     per-crossing spectrum for the relevant silicon thickness, not from a
- *     muon-derived Landau. "MIP" remains only the reco unit.
+ * The spots carry the energy deposited in the ABSORBER, which is the quantity
+ * the Gamma profile describes. Converting that to the silicon deposit a PCaloHit
+ * must carry is HGCalReverseCalibration's job, applied in HGCalHitMaker once the
+ * cell thickness is known from the DetId.
  */
 
 #include "FastSimulation/CaloHitMakers/interface/HGCalShowerSpot.h"
@@ -48,6 +47,7 @@
 
 class RandomEngineAndDistribution;
 class HGCalProperties;
+class HGCalFastGeometry;
 
 namespace edm {
   class ParameterSet;
@@ -55,7 +55,7 @@ namespace edm {
 
 class HGCalGFlashModel {
 public:
-  HGCalGFlashModel(const edm::ParameterSet& ps, const HGCalProperties* props);
+  HGCalGFlashModel(const edm::ParameterSet& ps, const HGCalProperties* props, const HGCalFastGeometry* geom);
 
   /// Generate the spots for one incident particle.
   /// \param e0        incident energy, GeV
@@ -83,6 +83,7 @@ public:
 
 private:
   const HGCalProperties* props_;
+  const HGCalFastGeometry* geom_;   ///< for the true layer z positions
 
   // longitudinal
   double a0_, a1_, t0_, t1_;
@@ -95,15 +96,11 @@ private:
   double r68Slope_, r68Const_;
   double coreOverR68_, tailOverCore_, coreFrac0_, coreFrac1_;
 
-  // per-crossing deposit
-  std::vector<double> crossingMPV_;    ///< keV, per Si thickness type
-  std::vector<double> crossingWidth_;  ///< keV
-  double meanCrossingE_;               ///< GeV, mean energy per crossing
-
   double spotEnergyGeV_;   ///< target energy per spot
   unsigned maxSpots_;
   bool applyW_;
   bool applyTransverse_;
+  bool applyConversion_;  ///< off when T was fitted on photons (conversion already in it)
 };
 
 #endif

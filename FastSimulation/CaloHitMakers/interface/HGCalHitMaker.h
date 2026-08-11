@@ -27,12 +27,19 @@
 #include <vector>
 
 class HGCalFastGeometry;
+class HGCalReverseCalibration;
+class RandomEngineAndDistribution;
 
 class HGCalHitMaker {
 public:
-  /// \param geom  fast lookup for the CE-E subdetector
-  /// \param trackId  SimTrack id written into the hits
-  HGCalHitMaker(const HGCalFastGeometry* geom, int trackId);
+  /// \param geom   fast lookup for the CE-E subdetector
+  /// \param calib  shower energy -> silicon deposit (inverse of reco)
+  /// \param random needed for the crossing-by-crossing fluctuation
+  /// \param trackId SimTrack id written into the hits
+  HGCalHitMaker(const HGCalFastGeometry* geom,
+                const HGCalReverseCalibration* calib,
+                const RandomEngineAndDistribution* random,
+                int trackId);
 
   /// Add one spot. Returns false if it did not land on a valid cell.
   bool addSpot(const HGCalShowerSpot& spot);
@@ -40,8 +47,12 @@ public:
   /// Add a whole shower.
   unsigned addSpots(const std::vector<HGCalShowerSpot>& spots);
 
-  /// Energy that fell outside any valid cell (leakage / dead area), GeV.
+  /// Shower energy that fell outside any valid cell (leakage / dead area), GeV.
   double lostEnergy() const { return lost_; }
+
+  /// Total silicon energy actually deposited, GeV. This is ~0.5% of the incident
+  /// energy, not equal to it -- a useful check that the calibration is applied.
+  double depositedEnergy() const;
 
   /// Fill a PCaloHit container. Energies are the summed spot energies times the
   /// FullSim sim weight; time is the energy-weighted mean time of flight.
@@ -56,6 +67,8 @@ private:
   };
 
   const HGCalFastGeometry* geom_;
+  const HGCalReverseCalibration* calib_;
+  const RandomEngineAndDistribution* random_;
   int trackId_;
   double lost_ = 0.;
   std::map<uint32_t, Accum> cells_;

@@ -8,6 +8,7 @@
 <use name="Geometry/Records"/>
 <use name="Geometry/EcalAlgo"/>
 <use name="SimGeneral/HepPDTRecord"/>
+<use name="FastSimulation/Utilities"/>
 <export>
   <lib name="1"/>
 </export>

@@ -1,5 +1,6 @@
 #include "FastSimulation/ShowerDevelopment/interface/HGCalGFlashModel.h"
 #include "FastSimulation/CalorimeterProperties/interface/HGCalProperties.h"
+#include "FastSimulation/CaloGeometryTools/interface/HGCalFastGeometry.h"
 #include "FastSimulation/Utilities/interface/RandomEngineAndDistribution.h"
 
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
@@ -22,7 +23,10 @@ namespace {
   }
 }  // namespace
 
-HGCalGFlashModel::HGCalGFlashModel(const edm::ParameterSet& ps, const HGCalProperties* props) : props_(props) {
+HGCalGFlashModel::HGCalGFlashModel(const edm::ParameterSet& ps,
+                                   const HGCalProperties* props,
+                                   const HGCalFastGeometry* geom)
+    : props_(props), geom_(geom) {
   const edm::ParameterSet lon = ps.getParameter<edm::ParameterSet>("Longitudinal");
   a0_ = lon.getParameter<double>("alphaSlope");
   a1_ = lon.getParameter<double>("alphaConst");
@@ -48,10 +52,7 @@ HGCalGFlashModel::HGCalGFlashModel(const edm::ParameterSet& ps, const HGCalPrope
   coreFrac1_ = tr.getParameter<double>("coreFractionConst");
   applyTransverse_ = tr.getParameter<bool>("apply");
 
-  const edm::ParameterSet xr = ps.getParameter<edm::ParameterSet>("Crossing");
-  crossingMPV_ = xr.getParameter<std::vector<double> >("mpvKeV");
-  crossingWidth_ = xr.getParameter<std::vector<double> >("widthKeV");
-  meanCrossingE_ = xr.getParameter<double>("meanEnergyGeV");
+  applyConversion_ = lon.getParameter<bool>("applyPhotonConversion");
 
   spotEnergyGeV_ = ps.getParameter<double>("spotEnergy");
   maxSpots_ = ps.getParameter<unsigned>("maxSpots");
@@ -110,7 +111,7 @@ void HGCalGFlashModel::compute(double e0,
   // Photons start after a conversion; this is sampled explicitly rather than
   // absorbed into the shape, because fitting it as a free shift is degenerate.
   double x0Offset = 0.;
-  if (isGamma) {
+  if (isGamma && applyConversion_) {
     const double u = std::max(random->flatShoot(), 1e-9);
     x0Offset = -std::log(u) * kConvX0;
   }
@@ -125,8 +126,11 @@ void HGCalGFlashModel::compute(double e0,
   std::vector<double> eLayer(nl + 1, 0.);
   double norm = 0.;
   for (unsigned L = 1; L <= nl; ++L) {
-    const double f = (props_->frontX0(L) - x0Offset) * pathScale;
-    const double b = (props_->frontX0(L) + props_->layerX0(L) - x0Offset) * pathScale;
+    // frontX0/layerX0 are normal-incidence depths, so they scale with pathScale.
+    // x0Offset is already a distance along the trajectory and must NOT be scaled
+    // again -- doing so delayed the conversion by ~3.7% at eta=2, 10.5% at 1.5.
+    const double f = props_->frontX0(L) * pathScale - x0Offset;
+    const double b = (props_->frontX0(L) + props_->layerX0(L)) * pathScale - x0Offset;
     if (b <= 0.)
       continue;
     const double lo = gammaCdf(alpha, beta * std::max(f, 0.));
@@ -180,7 +184,7 @@ void HGCalGFlashModel::compute(double e0,
   }
 
   const double tmax = std::max(T, 0.2);
-  const double x0PerCm = props_->radLenIncm();
+  const int zside = (dir[2] >= 0.) ? 1 : -1;
 
   for (unsigned L = 1; L <= nl; ++L) {
     if (eLayer[L] <= 0.)
@@ -199,11 +203,24 @@ void HGCalGFlashModel::compute(double e0,
     const double rt = tailRadius(tau);
     const double pcore = coreFraction(tau);
 
-    // where the trajectory crosses this layer
-    const double sAlongCm = (props_->frontX0(L) + 0.5 * props_->layerX0(L)) * x0PerCm * pathScale;
-    const double cx = entry[0] + dir[0] * sAlongCm;
-    const double cy = entry[1] + dir[1] * sAlongCm;
-    const double cz = entry[2] + dir[2] * sAlongCm;
+    // Where the trajectory crosses this layer. The physical z spacing is NOT
+    // X0 * radLenIncm: the configured stack is 25.6 X0 = 19.7 cm while the real
+    // CE-E envelope is ~40.9 cm, so using the X0 length compresses the shower
+    // toward the front and lands spots in the wrong cells (~5.8 cm error at the
+    // back at eta=2). Take the true plane position from the geometry; the X0
+    // table still sets the shower age and the energy sharing.
+    double cx, cy, cz;
+    if (geom_ != nullptr && geom_->layerZ(static_cast<int>(L)) > 0. && std::abs(dir[2]) > 1e-6) {
+      cz = zside * geom_->layerZ(static_cast<int>(L));
+      const double sAlongCm = (cz - entry[2]) / dir[2];
+      cx = entry[0] + dir[0] * sAlongCm;
+      cy = entry[1] + dir[1] * sAlongCm;
+    } else {
+      const double sAlongCm = (props_->frontX0(L) + 0.5 * props_->layerX0(L)) * props_->radLenIncm() * pathScale;
+      cx = entry[0] + dir[0] * sAlongCm;
+      cy = entry[1] + dir[1] * sAlongCm;
+      cz = entry[2] + dir[2] * sAlongCm;
+    }
 
     for (unsigned is = 0; is < n; ++is) {
       double r = 0.;
@@ -215,11 +232,21 @@ void HGCalGFlashModel::compute(double e0,
       const double phi = 2. * M_PI * random->flatShoot();
       const double cphi = std::cos(phi), sphi = std::sin(phi);
 
+      // The offset q is perpendicular to the shower axis, so it has a z
+      // component. Adding it directly would take the spot off the layer plane,
+      // narrow the in-plane footprint by |dir_z|^2 (7% at eta=2, 18% at 1.5) and
+      // could even flip a far-tail spot to the other endcap. Slide back along the
+      // axis until z is on the plane again -- that is the intended ellipse.
+      const double qx = r * (cphi * u1[0] + sphi * u2[0]);
+      const double qy = r * (cphi * u1[1] + sphi * u2[1]);
+      const double qz = r * (cphi * u1[2] + sphi * u2[2]);
+      const double lambda = (std::abs(dir[2]) > 1e-6) ? (-qz / dir[2]) : 0.;
+
       HGCalShowerSpot sp;
       sp.layer = static_cast<int>(L);
-      sp.x = cx + r * (cphi * u1[0] + sphi * u2[0]);
-      sp.y = cy + r * (cphi * u1[1] + sphi * u2[1]);
-      sp.z = cz + r * (cphi * u1[2] + sphi * u2[2]);
+      sp.x = cx + qx + lambda * dir[0];
+      sp.y = cy + qy + lambda * dir[1];
+      sp.z = cz;
       sp.energy = eSpot;
       sp.t = std::sqrt(sp.x * sp.x + sp.y * sp.y + sp.z * sp.z) / kCLight;
       spots.push_back(sp);

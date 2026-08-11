@@ -9,6 +9,7 @@
 #include "FastSimulation/Calorimetry/interface/CalorimetryManager.h"
 #include "FastSimulation/CaloGeometryTools/interface/HGCalFastGeometry.h"
 #include "FastSimulation/CalorimeterProperties/interface/HGCalProperties.h"
+#include "FastSimulation/CalorimeterProperties/interface/HGCalReverseCalibration.h"
 #include "FastSimulation/ShowerDevelopment/interface/HGCalGFlashModel.h"
 #include "FastSimulation/CaloHitMakers/interface/HGCalHitMaker.h"
 #include "FastSimulation/Event/interface/FSimEvent.h"
@@ -132,8 +133,10 @@ CalorimetryManager::CalorimetryManager(const edm::ParameterSet& fastCalo,
       const HGCalDDDConstants& ddd = iSetup.getData(iConsumer.hgcalEEESToken);
       hgcalGeometry_ = std::make_unique<HGCalFastGeometry>(ddd, DetId::HGCalEE);
       hgcalProperties_ = std::make_unique<HGCalProperties>(hgc);
-      hgcalShower_ = std::make_unique<HGCalGFlashModel>(hgc.getParameter<edm::ParameterSet>("ShowerParameters"),
-                                                       hgcalProperties_.get());
+      hgcalCalibration_ =
+          std::make_unique<HGCalReverseCalibration>(hgc.getParameter<edm::ParameterSet>("ReverseCalibration"));
+      hgcalShower_ = std::make_unique<HGCalGFlashModel>(
+          hgc.getParameter<edm::ParameterSet>("ShowerParameters"), hgcalProperties_.get(), hgcalGeometry_.get());
       edm::LogInfo("CalorimetryManager")
           << "HGCAL CE-E FastSim enabled: " << hgcalProperties_->nLayers() << " layers, "
           << hgcalGeometry_->nCachedWafers() << " cached wafers";
@@ -1024,7 +1027,7 @@ void CalorimetryManager::HGCalShowerSimulation(const FSimTrack& myTrack,
   if (spots.empty())
     return;
 
-  HGCalHitMaker maker(hgcalGeometry_.get(), myTrack.id());
+  HGCalHitMaker maker(hgcalGeometry_.get(), hgcalCalibration_.get(), random, myTrack.id());
   maker.addSpots(spots);
   maker.fillHits(*container.hitsHGCEE);
 }

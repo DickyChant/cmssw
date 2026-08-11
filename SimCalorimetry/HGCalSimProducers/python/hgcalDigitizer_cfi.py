@@ -414,3 +414,15 @@ def HFNose_setEndOfLifeNoise(process,byDose=True,byDoseAlgo=0,byDoseFactor=1):
     return process
 
 doseMapNose = cms.string("SimCalorimetry/HGCalSimProducers/data/doseParams_3000fb_fluka_HFNose_3.7.20.12_Eta2.4.txt")
+
+##############################################################################
+# FastSim writes its HGCAL SimHits from the fastSimProducer module, not from
+# g4SimHits. The instance label is deliberately identical ("HGCHitsEE"), but the
+# module label is part of the InputTag, so without this the digitizer finds no
+# collection, logs it, and returns -- producing digis with noise only.
+#
+# Same pattern as ecalDigitizer_cfi / pixelDigitizer_cfi. CE-H is not produced by
+# FastSim yet, so only the CE-E digitizer is redirected.
+##############################################################################
+from Configuration.Eras.Modifier_fastSim_cff import fastSim
+fastSim.toModify(hgceeDigitizer, hitsProducer = "fastSimProducer")
