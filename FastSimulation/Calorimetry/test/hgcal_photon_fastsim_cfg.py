@@ -18,6 +18,8 @@ from Configuration.Eras.Era_Phase2C17I13M9_FastSim_cff import Phase2C17I13M9_Fas
 opts = VarParsing.VarParsing('analysis')
 opts.register('energy', 50.0, VarParsing.VarParsing.multiplicity.singleton,
               VarParsing.VarParsing.varType.float, 'photon energy [GeV]')
+opts.register('seed', 12345, VarParsing.VarParsing.multiplicity.singleton,
+              VarParsing.VarParsing.varType.int, 'RNG seed (must differ per batch job)')
 opts.setDefault('maxEvents', 20)
 opts.parseArguments()
 
@@ -39,9 +41,9 @@ process.source = cms.Source('EmptySource')
 
 process.RandomNumberGeneratorService = cms.Service(
     'RandomNumberGeneratorService',
-    generator=cms.PSet(initialSeed=cms.untracked.uint32(12345)),
-    VtxSmeared=cms.PSet(initialSeed=cms.untracked.uint32(12346)),
-    fastSimProducer=cms.PSet(initialSeed=cms.untracked.uint32(12347)),
+    generator=cms.PSet(initialSeed=cms.untracked.uint32(opts.seed)),
+    VtxSmeared=cms.PSet(initialSeed=cms.untracked.uint32(opts.seed + 1)),
+    fastSimProducer=cms.PSet(initialSeed=cms.untracked.uint32(opts.seed + 2)),
 )
 
 # Fixed eta = 2.0, matching the samples the parametrization was derived from.

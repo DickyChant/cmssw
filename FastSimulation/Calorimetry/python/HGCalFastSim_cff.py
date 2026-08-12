@@ -171,6 +171,11 @@ hgcalReverseCalibration = cms.PSet(
     # says it is not (LD200: <m> = 5.6 with P(1) = 0.44 against 0.02 for Poisson).
     # The mean deposit is unaffected; only the fluctuation shape is approximate.
     fluctuate = cms.bool(True),
+
+    # The Landau tail is unbounded; a single crossing in thin silicon is not.
+    # Uncapped, ~5% of hits at 500 GeV ran away to ~1 GeV each and carried 99% of
+    # the event energy. 30x MPV is ~2.3 MeV for LD200 -- generous but finite.
+    maxCrossingOverMPV = cms.double(30.),
 )
 
 # The block CalorimetryManager reads.

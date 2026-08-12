@@ -33,6 +33,7 @@
  */
 
 #include <memory>
+#include <mutex>
 #include <vector>
 
 namespace edm {
@@ -78,8 +79,21 @@ private:
   std::vector<double> crossingWidthkeV_;
   std::vector<double> crossingMeankeV_;
   bool fluctuate_ = true;
+  /// Cap on a single crossing, in units of the MPV. The Landau tail is
+  /// unbounded; a real crossing in thin silicon is not.
+  double maxCrossingOverMPV_ = 30.;
 
   std::unique_ptr<LandauFluctuationGenerator> landau_;
+
+  /// Mean of the *sampled* per-crossing shape, per thickness. This is NOT the
+  /// measured crossingMean: sampling mpv + width*Landau (clamped) has its own
+  /// mean, and normalising by the measured one instead biases every deposit low
+  /// by a constant factor. Estimated once, on first use, from the same generator
+  /// and clamp that the sampling uses.
+  mutable std::vector<double> drawMeankeV_;
+  mutable std::once_flag drawMeanOnce_;
+
+  void ensureDrawMean(const RandomEngineAndDistribution* random) const;
 };
 
 #endif
