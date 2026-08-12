@@ -163,6 +163,19 @@ bool fastsim::LayerNavigator::moveParticleToNextLayer(fastsim::Particle& particl
       if (particle.momentum().Z() > 0) {
         previousForwardLayer_ = nextForwardLayer_;
         nextForwardLayer_ = geometry_->nextLayer(nextForwardLayer_);
+        // Skip any layers co-located with the one just crossed. fastsim::Geometry
+        // only rejects forward layers with *decreasing* z, so two layers at the
+        // same z are legal -- and the Phase-2 tracker has such a pair at z = 265.
+        // Without this the successor sits exactly where the particle already is,
+        // its crossing time is never positive, so it is never selected and the
+        // forward chain stalls for the rest of the trajectory: the particle then
+        // leaves through the barrel boundary far downstream (z = 468 at eta = 2),
+        // past the calorimeter front face, and no calorimetry runs at all.
+        // A no-op for geometries whose forward layers have strictly increasing z.
+        while (nextForwardLayer_ != nullptr && previousForwardLayer_ != nullptr &&
+               nextForwardLayer_->getZ() <= previousForwardLayer_->getZ()) {
+          nextForwardLayer_ = geometry_->nextLayer(nextForwardLayer_);
+        }
       }
     } else if (layer == previousForwardLayer_) {
       if (particle.momentum().Z() < 0) {
