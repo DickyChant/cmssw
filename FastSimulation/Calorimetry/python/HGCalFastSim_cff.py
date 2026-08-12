@@ -50,11 +50,16 @@ hgcalShowerParameters = cms.PSet(
         # Grindhammer-Peters expects ~0.51 here). Per-event Gamma fits are needed
         # before this correlation should be trusted; the widths are also known to
         # be ~13% low because only (alpha, T) fluctuate globally.
-        # The T fit above was made on PHOTON samples, so the conversion depth is
-        # already inside tConst (that is the +0.88 X0 offset). Adding an explicit
-        # stochastic conversion on top would count it twice. Switch this on only
-        # together with an electron-based T fit.
-        applyPhotonConversion = cms.bool(False),
+        # Sample the photon conversion depth explicitly, -ln(u) * 9/7 X0.
+        #
+        # It was first assumed that conversion was already inside tConst, since
+        # the T fit was made on photons, and the explicit term was left off. The
+        # per-layer comparison against FullSim says otherwise: without it the
+        # shower peaks at layer 7 instead of 9-11, about 1.2 X0 early -- close to
+        # the 1.29 X0 mean conversion depth. Turning it on halves the spread of
+        # the per-layer ratio (0.574 -> 0.337) and fixes layer 1 (1.71 -> 0.79),
+        # while leaving the total unchanged (1.017 -> 1.013).
+        applyPhotonConversion = cms.bool(True),
 
         sigmaLnAlpha = cms.double(0.419),
         sigmaLnT     = cms.double(0.257),
