@@ -39,6 +39,14 @@ hgcalShowerParameters = cms.PSet(
         # Measured: slopes reproduce the 2021 values to 3% (alpha) and 1.7% (T);
         # the T offset differs by +0.88 X0, consistent with the +1.29 X0 expected
         # from photon conversion (the 2021 fit used electrons).
+        # A conversion-convolved refit against the FullSim absorber profile was
+        # tried (analysis/refit_longitudinal_raw.py). It returns
+        # 0.5704/-0.6898, 1.0655/-2.1236, reassuringly close to the 2021 ELECTRON
+        # values -- but it fits the profile poorly (residual ~0.21) and is clearly
+        # WORSE in the per-layer comparison: the ratio spread goes 0.337 -> 0.730
+        # and the first core layer 1.68 -> 3.09. Kept the values below, which are
+        # the better description empirically. The refit needs a better target than
+        # a single convolved Gamma before it can replace these.
         alphaSlope   = cms.double(0.648),
         alphaConst   = cms.double(0.187),
         tSlope       = cms.double(1.030),
