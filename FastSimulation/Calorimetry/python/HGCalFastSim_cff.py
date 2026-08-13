@@ -176,6 +176,11 @@ hgcalReverseCalibration = cms.PSet(
     # shower crossings are not minimum-ionising (mean/MPV = 1.74 vs 1.34 for a
     # true Landau). HD120 gives 387.9 eV/um against the PDG 388, untuned, and the
     # MPVs are energy independent to <1% between 50 and 500 GeV.
+    # Cross-checked on PIONS: the LD200 per-crossing MPV agrees with photons to
+    # 2% (59.9 vs 61.1 keV), so these constants are a sensor property and are not
+    # photon-specific. Pions do give lower crossing multiplicity (2.33 vs 3.99)
+    # and much wider showers (10x more LD300 hits), but multiplicity is derived
+    # per cell from the cell energy here, so it adapts on its own.
     crossingMPVkeV   = cms.vdouble(46.55, 75.12, 101.08),
     crossingWidthkeV = cms.vdouble(19.89, 28.23, 40.18),
     crossingMeankeV  = cms.vdouble(86.14, 186.09, 156.99),
