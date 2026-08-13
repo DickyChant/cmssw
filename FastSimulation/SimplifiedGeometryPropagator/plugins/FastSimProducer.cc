@@ -220,6 +220,7 @@ FastSimProducer::FastSimProducer(const edm::ParameterSet& iConfig)
   // Phase-2 HGCAL. The instance label matches FullSim g4SimHits so HGCDigitizer
   // consumes it unchanged; empty unless HGCAL simulation is configured.
   produces<edm::PCaloHitContainer>("HGCHitsEE");
+  produces<edm::PCaloHitContainer>("HGCHitsHEfront");
   produces<edm::SimTrackContainer>("MuonSimTracks");
 }
 
@@ -412,6 +413,7 @@ void FastSimProducer::produce(edm::StreamID id, edm::Event& iEvent, const edm::E
   iEvent.put(std::move(caloProducts->hitsES), "EcalHitsES");
   iEvent.put(std::move(caloProducts->hitsHCAL), "HcalHits");
   iEvent.put(std::move(caloProducts->hitsHGCEE), "HGCHitsEE");
+  iEvent.put(std::move(caloProducts->hitsHGCHEfront), "HGCHitsHEfront");
   iEvent.put(std::move(caloProducts->tracksMuon), "MuonSimTracks");
 }
 

@@ -6,4 +6,6 @@ CalorimetryConsumer::CalorimetryConsumer(edm::ConsumesCollector&& iC)
       caloTopologyESToken(iC.esConsumes<edm::Transition::BeginRun>()),
       hcalDDDSimConstantsESToken(iC.esConsumes<edm::Transition::BeginRun>()),
       hcalSimulationConstantsESToken(iC.esConsumes<edm::Transition::BeginRun>()),
-      hgcalEEESToken(iC.esConsumes<edm::Transition::BeginRun>(edm::ESInputTag{"", "HGCalEESensitive"})) {}
+      hgcalEEESToken(iC.esConsumes<edm::Transition::BeginRun>(edm::ESInputTag{"", "HGCalEESensitive"})),
+      hgcalHEESToken(
+          iC.esConsumes<edm::Transition::BeginRun>(edm::ESInputTag{"", "HGCalHESiliconSensitive"})) {}

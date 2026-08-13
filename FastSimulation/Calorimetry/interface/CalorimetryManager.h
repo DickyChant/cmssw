@@ -45,6 +45,7 @@ class HGCalFastGeometry;
 class HGCalProperties;
 class HGCalReverseCalibration;
 class HGCalGFlashModel;
+class HGCalHadronModel;
 
 struct CaloProductContainer {
   CaloProductContainer()
@@ -53,6 +54,7 @@ struct CaloProductContainer {
         hitsES(std::make_unique<edm::PCaloHitContainer>()),
         hitsHCAL(std::make_unique<edm::PCaloHitContainer>()),
         hitsHGCEE(std::make_unique<edm::PCaloHitContainer>()),
+        hitsHGCHEfront(std::make_unique<edm::PCaloHitContainer>()),
         tracksMuon(std::make_unique<edm::SimTrackContainer>()) {}
 
   std::unique_ptr<edm::PCaloHitContainer> hitsEB;
@@ -63,6 +65,8 @@ struct CaloProductContainer {
   /// so the standard HGCDigitizer consumes them unchanged. CE-H (HGCHitsHEfront /
   /// HGCHitsHEback) is not produced yet.
   std::unique_ptr<edm::PCaloHitContainer> hitsHGCEE;
+  /// CE-H silicon, instance label "HGCHitsHEfront" as in FullSim.
+  std::unique_ptr<edm::PCaloHitContainer> hitsHGCHEfront;
   std::unique_ptr<edm::SimTrackContainer> tracksMuon;
 };
 
@@ -131,6 +135,11 @@ private:
                              const RandomEngineAndDistribution* random,
                              CaloProductContainer& container) const;
 
+  /// Hadronic shower spanning CE-E and CE-H.
+  void HGCalHadronShowerSimulation(const FSimTrack& myTrack,
+                                   const RandomEngineAndDistribution* random,
+                                   CaloProductContainer& container) const;
+
   void updateECAL(
       const CaloHitMap& hitMap, int onEcal, int trackID, CaloProductContainer& container, float corr = 1.0) const;
   void updateHCAL(const CaloHitMap& hitMap,
@@ -149,10 +158,12 @@ private:
   std::unique_ptr<CaloGeometryHelper> myCalorimeter_;
 
   // HGCAL (Phase-2). All null when HGCAL is not configured.
-  std::unique_ptr<HGCalFastGeometry> hgcalGeometry_;
+  std::unique_ptr<HGCalFastGeometry> hgcalGeometry_;     ///< CE-E
+  std::unique_ptr<HGCalFastGeometry> hgcalGeometryHE_;   ///< CE-H silicon
   std::unique_ptr<HGCalProperties> hgcalProperties_;
   std::unique_ptr<HGCalReverseCalibration> hgcalCalibration_;
   std::unique_ptr<HGCalGFlashModel> hgcalShower_;
+  std::unique_ptr<HGCalHadronModel> hgcalHadron_;
   bool simulateHGCal_ = false;
 
   std::unique_ptr<HCALResponse> myHDResponse_;

@@ -11,6 +11,7 @@
 #include "FastSimulation/CalorimeterProperties/interface/HGCalProperties.h"
 #include "FastSimulation/CalorimeterProperties/interface/HGCalReverseCalibration.h"
 #include "FastSimulation/ShowerDevelopment/interface/HGCalGFlashModel.h"
+#include "FastSimulation/ShowerDevelopment/interface/HGCalHadronModel.h"
 #include "FastSimulation/CaloHitMakers/interface/HGCalHitMaker.h"
 #include "FastSimulation/Event/interface/FSimEvent.h"
 #include "FastSimulation/Event/interface/FSimTrack.h"
@@ -137,6 +138,15 @@ CalorimetryManager::CalorimetryManager(const edm::ParameterSet& fastCalo,
           std::make_unique<HGCalReverseCalibration>(hgc.getParameter<edm::ParameterSet>("ReverseCalibration"));
       hgcalShower_ = std::make_unique<HGCalGFlashModel>(
           hgc.getParameter<edm::ParameterSet>("ShowerParameters"), hgcalProperties_.get(), hgcalGeometry_.get());
+
+      // CE-H silicon: hadronic showers put up to half their visible energy there.
+      const HGCalDDDConstants& dddHE = iSetup.getData(iConsumer.hgcalHEESToken);
+      hgcalGeometryHE_ = std::make_unique<HGCalFastGeometry>(dddHE, DetId::HGCalHSi);
+      hgcalHadron_ = std::make_unique<HGCalHadronModel>(hgc.getParameter<edm::ParameterSet>("HadronParameters"),
+                                                       hgcalGeometry_.get(), hgcalGeometryHE_.get());
+      edm::LogInfo("CalorimetryManager")
+          << "HGCAL CE-H FastSim enabled: " << hgcalGeometryHE_->nLayers() << " layers, "
+          << hgcalGeometryHE_->nCachedWafers() << " cached wafers";
       edm::LogInfo("CalorimetryManager")
           << "HGCAL CE-E FastSim enabled: " << hgcalProperties_->nLayers() << " layers, "
           << hgcalGeometry_->nCachedWafers() << " cached wafers";
@@ -197,7 +207,9 @@ void CalorimetryManager::reconstructTrack(const FSimTrack& myTrack,
     // Simulate energy smearing for hadrons (i.e., everything
     // but muons... and SUSY particles that deserve a special
     // treatment.
-    else if (pid < 1000000) {
+    else if (simulateHGCal_ && hgcalHadron_ && myTrack.onHGCal() && pid < 1000000) {
+      HGCalHadronShowerSimulation(myTrack, random, container);
+    } else if (pid < 1000000) {
       if (myTrack.onHcal() || myTrack.onVFcal()) {
         if (optionHDSim_ == 0)
           reconstructHCAL(myTrack, random, container);
@@ -1030,6 +1042,42 @@ void CalorimetryManager::HGCalShowerSimulation(const FSimTrack& myTrack,
   HGCalHitMaker maker(hgcalGeometry_.get(), hgcalCalibration_.get(), random, myTrack.id());
   maker.addSpots(spots);
   maker.fillHits(*container.hitsHGCEE);
+}
+
+void CalorimetryManager::HGCalHadronShowerSimulation(const FSimTrack& myTrack,
+                                                    const RandomEngineAndDistribution* random,
+                                                    CaloProductContainer& container) const {
+  if (!hgcalHadron_ || !hgcalGeometry_)
+    return;
+
+  const RawParticle& pp = myTrack.hgcalEntrance();
+  const double e0 = pp.e();
+  const double pmag = pp.momentum().P();
+  if (e0 <= 0. || pmag <= 0.)
+    return;
+
+  const double entry[3] = {pp.vertex().X(), pp.vertex().Y(), pp.vertex().Z()};
+  const double dir[3] = {pp.momentum().X() / pmag, pp.momentum().Y() / pmag, pp.momentum().Z() / pmag};
+
+  std::vector<HGCalShowerSpot> spots;
+  hgcalHadron_->compute(e0, entry, dir, random, spots);
+  if (spots.empty())
+    return;
+
+  // Split the shower between the two subdetectors: CE-E layers 1..26 keep their
+  // numbering, CE-H layers 27..47 are renumbered from 1 for their own geometry.
+  HGCalHitMaker makerEE(hgcalGeometry_.get(), hgcalCalibration_.get(), random, myTrack.id());
+  HGCalHitMaker makerHE(hgcalGeometryHE_.get(), hgcalCalibration_.get(), random, myTrack.id());
+  for (auto sp : spots) {
+    if (sp.layer <= HGCalHadronModel::kNCEE) {
+      makerEE.addSpot(sp);
+    } else if (hgcalGeometryHE_) {
+      sp.layer -= HGCalHadronModel::kNCEE;
+      makerHE.addSpot(sp);
+    }
+  }
+  makerEE.fillHits(*container.hitsHGCEE);
+  makerHE.fillHits(*container.hitsHGCHEfront);
 }
 
 void CalorimetryManager::updateECAL(

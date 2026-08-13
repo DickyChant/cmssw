@@ -27,6 +27,9 @@ struct CalorimetryConsumer {
   /// but only actually retrieved when HGCAL simulation is switched on -- getting
   /// it unconditionally would break Run-2/3 workflows that have no HGCAL.
   edm::ESGetToken<HGCalDDDConstants, IdealGeometryRecord> hgcalEEESToken;
+  /// CE-H silicon. Needed for hadronic showers, which put up to half their
+  /// energy there (measured: 38% at 50 GeV, 49% at 500 GeV for pions).
+  edm::ESGetToken<HGCalDDDConstants, IdealGeometryRecord> hgcalHEESToken;
 };
 
 #endif

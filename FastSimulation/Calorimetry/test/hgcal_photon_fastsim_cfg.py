@@ -18,6 +18,8 @@ from Configuration.Eras.Era_Phase2C17I13M9_FastSim_cff import Phase2C17I13M9_Fas
 opts = VarParsing.VarParsing('analysis')
 opts.register('energy', 50.0, VarParsing.VarParsing.multiplicity.singleton,
               VarParsing.VarParsing.varType.float, 'photon energy [GeV]')
+opts.register('pdgid', 22, VarParsing.VarParsing.multiplicity.singleton,
+              VarParsing.VarParsing.varType.int, 'particle id: 22 photon, 211 pion')
 opts.register('seed', 12345, VarParsing.VarParsing.multiplicity.singleton,
               VarParsing.VarParsing.varType.int, 'RNG seed (must differ per batch job)')
 opts.setDefault('maxEvents', 20)
@@ -50,7 +52,7 @@ process.RandomNumberGeneratorService = cms.Service(
 process.generator = cms.EDProducer(
     'FlatRandomEGunProducer',
     PGunParameters=cms.PSet(
-        PartID=cms.vint32(22),
+        PartID=cms.vint32(opts.pdgid),
         MinEta=cms.double(1.999), MaxEta=cms.double(2.001),
         MinPhi=cms.double(-3.14159265359), MaxPhi=cms.double(3.14159265359),
         MinE=cms.double(opts.energy), MaxE=cms.double(opts.energy),

@@ -196,10 +196,56 @@ hgcalReverseCalibration = cms.PSet(
     maxCrossingOverMPV = cms.double(30.),
 )
 
+##############################################################################
+# Hadronic showers, measured on the V16/D110 single-pion samples.
+#
+# These are not the electromagnetic numbers with different values: the shower
+# maximum sits at layer 25 (the CE-E/CE-H boundary) against layer 9 for photons,
+# CE-H carries 20% of the visible energy at 5 GeV rising to 49% at 500 GeV, and
+# the silicon sampling fraction is roughly half the electromagnetic one.
+##############################################################################
+
+hgcalHadronParameters = cms.PSet(
+    criticalEnergy = cms.double(10.48e-3),   # GeV, only used to form y = E/E_crit
+    spotEnergy     = cms.double(0.010),
+    maxSpots       = cms.uint32(2000),
+
+    Longitudinal = cms.PSet(
+        # Gamma in LAYER units over the full 47-layer stack. Layer units rather
+        # than interaction lengths because CE-E and CE-H differ in material, so a
+        # single lambda scale would not span both; the geometry supplies the
+        # positions. Fitted on pions: residual ~0.16-0.19.
+        alphaSlope   = cms.double(0.5350),
+        alphaConst   = cms.double(-1.1245),
+        tSlope       = cms.double(2.6730),
+        tConst       = cms.double(-5.5673),
+        # Hadronic showers fluctuate more than electromagnetic ones.
+        sigmaLnAlpha = cms.double(0.35),
+        sigmaLnT     = cms.double(0.30),
+    ),
+
+    # Visible-energy suppression relative to an EM shower of the same energy.
+    # Measured 0.623 / 0.557 / 0.548 at 5 / 50 / 500 GeV -- energy dependent, so
+    # it cannot be folded into a single constant.
+    ehSlope = cms.double(-0.0163),
+    ehConst = cms.double(0.7239),
+
+    Transverse = cms.PSet(
+        # Hadronic showers are much wider than electromagnetic ones (ten times the
+        # LD300 hits at the same energy), so the radii are correspondingly larger.
+        r68Slope     = cms.double(2.20),
+        r68Const     = cms.double(1.20),
+        coreOverR68  = cms.double(0.62),
+        tailOverCore = cms.double(4.0),
+        coreFraction = cms.double(0.60),
+    ),
+)
+
 # The block CalorimetryManager reads.
 HGCalBlock = cms.PSet(
     simulateHGCal = cms.bool(True),
     HGCalCalorimeterProperties = hgcalCalorimeterProperties,
     ShowerParameters = hgcalShowerParameters,
     ReverseCalibration = hgcalReverseCalibration,
+    HadronParameters = hgcalHadronParameters,
 )
