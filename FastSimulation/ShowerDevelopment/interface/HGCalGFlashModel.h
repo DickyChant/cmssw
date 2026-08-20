@@ -55,7 +55,18 @@ namespace edm {
 
 class HGCalGFlashModel {
 public:
-  HGCalGFlashModel(const edm::ParameterSet& ps, const HGCalProperties* props, const HGCalFastGeometry* geom);
+  /// \param geom   CE-E geometry, for layers 1..kNCEE
+  /// \param cehGeom CE-H silicon geometry, for the electromagnetic tail that
+  ///        punches through the back of CE-E. May be null, in which case the
+  ///        shower is truncated at the end of CE-E as before.
+  HGCalGFlashModel(const edm::ParameterSet& ps,
+                   const HGCalProperties* props,
+                   const HGCalFastGeometry* geom,
+                   const HGCalFastGeometry* cehGeom = nullptr);
+
+  /// Layers 1..kNCEE are CE-E; beyond that the spot layer is global and the
+  /// caller routes it to CE-H, exactly as for the hadronic model.
+  static constexpr int kNCEE = 26;
 
   /// Generate the spots for one incident particle.
   /// \param e0        incident energy, GeV
@@ -83,7 +94,8 @@ public:
 
 private:
   const HGCalProperties* props_;
-  const HGCalFastGeometry* geom_;   ///< for the true layer z positions
+  const HGCalFastGeometry* geom_;     ///< CE-E, for the true layer z positions
+  const HGCalFastGeometry* cehGeom_;  ///< CE-H silicon, for the punch-through tail
 
   // longitudinal
   double a0_, a1_, t0_, t1_;

@@ -136,12 +136,16 @@ CalorimetryManager::CalorimetryManager(const edm::ParameterSet& fastCalo,
       hgcalProperties_ = std::make_unique<HGCalProperties>(hgc);
       hgcalCalibration_ =
           std::make_unique<HGCalReverseCalibration>(hgc.getParameter<edm::ParameterSet>("ReverseCalibration"));
-      hgcalShower_ = std::make_unique<HGCalGFlashModel>(
-          hgc.getParameter<edm::ParameterSet>("ShowerParameters"), hgcalProperties_.get(), hgcalGeometry_.get());
-
-      // CE-H silicon: hadronic showers put up to half their visible energy there.
+      // CE-H silicon: hadronic showers put up to half their visible energy
+      // there, and electromagnetic ones leak a small tail through the back of
+      // CE-E. Built before the shower models so both can be given it.
       const HGCalDDDConstants& dddHE = iSetup.getData(iConsumer.hgcalHEESToken);
       hgcalGeometryHE_ = std::make_unique<HGCalFastGeometry>(dddHE, DetId::HGCalHSi);
+
+      hgcalShower_ = std::make_unique<HGCalGFlashModel>(hgc.getParameter<edm::ParameterSet>("ShowerParameters"),
+                                                       hgcalProperties_.get(),
+                                                       hgcalGeometry_.get(),
+                                                       hgcalGeometryHE_.get());
       hgcalHadron_ = std::make_unique<HGCalHadronModel>(hgc.getParameter<edm::ParameterSet>("HadronParameters"),
                                                        hgcalGeometry_.get(), hgcalGeometryHE_.get());
       edm::LogInfo("CalorimetryManager")
@@ -1039,9 +1043,21 @@ void CalorimetryManager::HGCalShowerSimulation(const FSimTrack& myTrack,
   if (spots.empty())
     return;
 
+  // The electromagnetic tail punches through the back of CE-E, so route spots
+  // the same way as the hadronic shower: CE-E keeps 1..26, CE-H is renumbered
+  // from 1 for its own geometry.
   HGCalHitMaker maker(hgcalGeometry_.get(), hgcalCalibration_.get(), random, myTrack.id());
-  maker.addSpots(spots);
+  HGCalHitMaker makerHE(hgcalGeometryHE_.get(), hgcalCalibration_.get(), random, myTrack.id());
+  for (auto sp : spots) {
+    if (sp.layer <= HGCalGFlashModel::kNCEE) {
+      maker.addSpot(sp);
+    } else if (hgcalGeometryHE_) {
+      sp.layer -= HGCalGFlashModel::kNCEE;
+      makerHE.addSpot(sp);
+    }
+  }
   maker.fillHits(*container.hitsHGCEE);
+  makerHE.fillHits(*container.hitsHGCHEfront);
 }
 
 void CalorimetryManager::HGCalHadronShowerSimulation(const FSimTrack& myTrack,

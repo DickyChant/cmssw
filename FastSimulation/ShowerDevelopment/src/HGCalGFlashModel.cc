@@ -25,8 +25,9 @@ namespace {
 
 HGCalGFlashModel::HGCalGFlashModel(const edm::ParameterSet& ps,
                                    const HGCalProperties* props,
-                                   const HGCalFastGeometry* geom)
-    : props_(props), geom_(geom) {
+                                   const HGCalFastGeometry* geom,
+                                   const HGCalFastGeometry* cehGeom)
+    : props_(props), geom_(geom), cehGeom_(cehGeom) {
   const edm::ParameterSet lon = ps.getParameter<edm::ParameterSet>("Longitudinal");
   a0_ = lon.getParameter<double>("alphaSlope");
   a1_ = lon.getParameter<double>("alphaConst");
@@ -189,6 +190,11 @@ void HGCalGFlashModel::compute(double e0,
   for (unsigned L = 1; L <= nl; ++L) {
     if (eLayer[L] <= 0.)
       continue;
+    // Without a CE-H geometry the tail has nowhere to go; drop it rather than
+    // extrapolating it into CE-E cells, which would pile the punch-through onto
+    // the last CE-E layer.
+    if (static_cast<int>(L) > kNCEE && cehGeom_ == nullptr)
+      continue;
 
     // number of spots for this layer, bounded so a very high energy shower
     // cannot blow up the event size
@@ -209,9 +215,17 @@ void HGCalGFlashModel::compute(double e0,
     // toward the front and lands spots in the wrong cells (~5.8 cm error at the
     // back at eta=2). Take the true plane position from the geometry; the X0
     // table still sets the shower age and the energy sharing.
+    // Beyond CE-E the tail continues into CE-H silicon, which numbers its layers
+    // from 1 again, so pick the geometry and re-base the index. Small for a
+    // photon (0.07% of the shower at 50 GeV) but it is what puts hits in
+    // detector 9 at all, and it grows with energy.
+    const bool inCEH = (static_cast<int>(L) > kNCEE);
+    const HGCalFastGeometry* lgeom = inCEH ? cehGeom_ : geom_;
+    const int localLayer = inCEH ? (static_cast<int>(L) - kNCEE) : static_cast<int>(L);
+
     double cx, cy, cz;
-    if (geom_ != nullptr && geom_->layerZ(static_cast<int>(L)) > 0. && std::abs(dir[2]) > 1e-6) {
-      cz = zside * geom_->layerZ(static_cast<int>(L));
+    if (lgeom != nullptr && lgeom->layerZ(localLayer) > 0. && std::abs(dir[2]) > 1e-6) {
+      cz = zside * lgeom->layerZ(localLayer);
       const double sAlongCm = (cz - entry[2]) / dir[2];
       cx = entry[0] + dir[0] * sAlongCm;
       cy = entry[1] + dir[1] * sAlongCm;

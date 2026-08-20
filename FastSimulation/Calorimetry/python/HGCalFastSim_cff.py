@@ -27,6 +27,38 @@ _layerX0 = [
     1.091, 1.149, 1.091, 1.149, 1.091, 1.149, 1.091, 1.149, 1.091,
 ]
 
+# CE-H silicon, 21 layers. Only the electromagnetic tail that punches through the
+# back of CE-E lands here (0.07% of a 50 GeV photon, rising with energy), but
+# without these entries the Gamma is truncated at layer 26 and detector 9 stays
+# empty for photons.
+#
+# Depth from the geometry: the CE-H layer pitch is 6.3 cm (z = 368.0, 374.3,
+# 380.6, ...) against 1.757 cm X0 for the stainless absorber, so a steel-filled
+# layer is ~3.6 X0. These are NOT a tuning handle for the punch-through: the
+# first CE-H bin starts at the fixed CE-E total depth (25.63 X0), so it collects
+# the whole Gamma tail no matter how the entries are chosen.
+#
+# MEASURED, 50 GeV photons vs the V16 FullSim reference (target 0.071% of the
+# shower in CE-H):
+#
+#   sigmaLnAlpha = 0.419 (tuned)   ->  1.04%   15x too much
+#   sigmaLnAlpha = 0               ->  0.169%  2.4x too much
+#
+# The second number matches the analytic tail Q(alpha=5.68, beta*t=15.2) = 0.17%,
+# which confirms the mechanism. So the punch-through is over-predicted twice
+# over: the mean-parameter Gamma tail is itself 2.4x too fat, and the log-normal
+# alpha fluctuation inflates it a further 6x because Q is strongly convex in
+# 1/alpha, so low-alpha events dominate the deep tail.
+#
+# This is a diagnostic of the longitudinal model, not of CE-H. The CE-E-only
+# profile comparison could not see it -- CE-E layer fractions are dominated by
+# the peak, where a fat tail costs almost nothing. Fixing it means refitting
+# sigmaLnAlpha (and rhoLnAlphaT, currently +0.51) against the punch-through and
+# the CE-E spread jointly, rather than damping the tail here.
+_cehFirstX0 = 3.6    # first CE-H layer (the CE-E/CE-H gap is not resolved here)
+_cehLayerX0 = 3.2    # per CE-H layer thereafter
+_layerX0 += [_cehFirstX0] + [_cehLayerX0] * 20
+
 hgcalShowerParameters = cms.PSet(
     # Target energy per spot and a hard cap, so a 1 TeV shower cannot blow up
     # the event size.
