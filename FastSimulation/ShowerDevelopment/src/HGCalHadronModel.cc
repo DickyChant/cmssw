@@ -13,9 +13,7 @@
 namespace {
   constexpr double kCLight = 29.9792458;  // cm/ns
 
-  inline double gammaCdf(double a, double x) {
-    return (x <= 0.) ? 0. : ROOT::Math::inc_gamma(a, x);
-  }
+  inline double gammaCdf(double a, double x) { return (x <= 0.) ? 0. : ROOT::Math::inc_gamma(a, x); }
 }  // namespace
 
 HGCalHadronModel::HGCalHadronModel(const edm::ParameterSet& ps,

@@ -87,10 +87,10 @@ private:
   double weight(int layer) const;
   double thicknessCorrection(int thickness) const;
 
-  std::vector<double> dEdXWeights_;           ///< MeV per MIP, indexed by layer
-  std::vector<double> fCPerMIP_;              ///< fC per MIP, by thickness type
-  std::vector<double> thicknessCorrection_;   ///< by thickness type (CE-E entries)
-  std::vector<double> cce_;                   ///< charge collection efficiency
+  std::vector<double> dEdXWeights_;          ///< MeV per MIP, indexed by layer
+  std::vector<double> fCPerMIP_;             ///< fC per MIP, by thickness type
+  std::vector<double> thicknessCorrection_;  ///< by thickness type (CE-E entries)
+  std::vector<double> cce_;                  ///< charge collection efficiency
   double keV2fC_ = 0.044259;
 
   std::vector<double> crossingMPVkeV_;

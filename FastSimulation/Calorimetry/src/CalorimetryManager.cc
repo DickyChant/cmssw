@@ -143,19 +143,17 @@ CalorimetryManager::CalorimetryManager(const edm::ParameterSet& fastCalo,
       hgcalGeometryHE_ = std::make_unique<HGCalFastGeometry>(dddHE, DetId::HGCalHSi);
 
       hgcalShower_ = std::make_unique<HGCalGFlashModel>(hgc.getParameter<edm::ParameterSet>("ShowerParameters"),
-                                                       hgcalProperties_.get(),
-                                                       hgcalGeometry_.get(),
-                                                       hgcalGeometryHE_.get());
+                                                        hgcalProperties_.get(),
+                                                        hgcalGeometry_.get(),
+                                                        hgcalGeometryHE_.get());
       hgcalHadron_ = std::make_unique<HGCalHadronModel>(hgc.getParameter<edm::ParameterSet>("HadronParameters"),
-                                                       hgcalGeometry_.get(),
-                                                       hgcalGeometryHE_.get(),
-                                                       hgcalProperties_.get());
-      edm::LogInfo("CalorimetryManager")
-          << "HGCAL CE-H FastSim enabled: " << hgcalGeometryHE_->nLayers() << " layers, "
-          << hgcalGeometryHE_->nCachedWafers() << " cached wafers";
-      edm::LogInfo("CalorimetryManager")
-          << "HGCAL CE-E FastSim enabled: " << hgcalProperties_->nLayers() << " layers, "
-          << hgcalGeometry_->nCachedWafers() << " cached wafers";
+                                                        hgcalGeometry_.get(),
+                                                        hgcalGeometryHE_.get(),
+                                                        hgcalProperties_.get());
+      edm::LogInfo("CalorimetryManager") << "HGCAL CE-H FastSim enabled: " << hgcalGeometryHE_->nLayers() << " layers, "
+                                         << hgcalGeometryHE_->nCachedWafers() << " cached wafers";
+      edm::LogInfo("CalorimetryManager") << "HGCAL CE-E FastSim enabled: " << hgcalProperties_->nLayers() << " layers, "
+                                         << hgcalGeometry_->nCachedWafers() << " cached wafers";
     }
   }
 
@@ -1023,8 +1021,8 @@ std::pair<double, double> CalorimetryManager::respCorr(double p) const {
 }
 
 void CalorimetryManager::HGCalShowerSimulation(const FSimTrack& myTrack,
-                                              const RandomEngineAndDistribution* random,
-                                              CaloProductContainer& container) const {
+                                               const RandomEngineAndDistribution* random,
+                                               CaloProductContainer& container) const {
   if (!hgcalShower_ || !hgcalGeometry_)
     return;
 
@@ -1063,8 +1061,8 @@ void CalorimetryManager::HGCalShowerSimulation(const FSimTrack& myTrack,
 }
 
 void CalorimetryManager::HGCalHadronShowerSimulation(const FSimTrack& myTrack,
-                                                    const RandomEngineAndDistribution* random,
-                                                    CaloProductContainer& container) const {
+                                                     const RandomEngineAndDistribution* random,
+                                                     CaloProductContainer& container) const {
   if (!hgcalHadron_ || !hgcalGeometry_)
     return;
 

@@ -158,8 +158,8 @@ private:
   std::unique_ptr<CaloGeometryHelper> myCalorimeter_;
 
   // HGCAL (Phase-2). All null when HGCAL is not configured.
-  std::unique_ptr<HGCalFastGeometry> hgcalGeometry_;     ///< CE-E
-  std::unique_ptr<HGCalFastGeometry> hgcalGeometryHE_;   ///< CE-H silicon
+  std::unique_ptr<HGCalFastGeometry> hgcalGeometry_;    ///< CE-E
+  std::unique_ptr<HGCalFastGeometry> hgcalGeometryHE_;  ///< CE-H silicon
   std::unique_ptr<HGCalProperties> hgcalProperties_;
   std::unique_ptr<HGCalReverseCalibration> hgcalCalibration_;
   std::unique_ptr<HGCalGFlashModel> hgcalShower_;

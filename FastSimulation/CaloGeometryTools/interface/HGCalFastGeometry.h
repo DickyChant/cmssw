@@ -108,7 +108,7 @@ private:
     double xMin = 0., yMin = 0.;
     double binCm = 0.;
     int nx = 0, ny = 0;
-    uint32_t waferBegin = 0;             // range in wafers_
+    uint32_t waferBegin = 0;  // range in wafers_
     uint32_t waferEnd = 0;
     std::vector<uint32_t> bucketOffset;  // size nx*ny+1, indexes bucketWafer
     std::vector<uint32_t> bucketWafer;   // indices into wafers_

@@ -141,7 +141,7 @@ private:
   double r68Slope_, r68Const_;
   double coreOverR68_, tailOverCore_, coreFrac0_, coreFrac1_;
 
-  double spotEnergyGeV_;   ///< target energy per spot
+  double spotEnergyGeV_;  ///< target energy per spot
   unsigned maxSpots_;
   bool applyW_;
   bool applyTransverse_;

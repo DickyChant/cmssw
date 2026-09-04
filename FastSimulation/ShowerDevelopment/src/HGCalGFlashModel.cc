@@ -91,9 +91,7 @@ double HGCalGFlashModel::coreRadius(double tau) const {
 
 double HGCalGFlashModel::tailRadius(double tau) const { return tailOverCore_ * coreRadius(tau); }
 
-double HGCalGFlashModel::coreFraction(double tau) const {
-  return std::clamp(coreFrac0_ * tau + coreFrac1_, 0.05, 1.0);
-}
+double HGCalGFlashModel::coreFraction(double tau) const { return std::clamp(coreFrac0_ * tau + coreFrac1_, 0.05, 1.0); }
 
 void HGCalGFlashModel::compute(double e0,
                                const double entry[3],
