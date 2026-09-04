@@ -1,21 +1,3 @@
-// ---------------------------------------------------------------------------
-// HGCAL FastSim (GFlash revival on the Phase-2 V16 geometry).
-//
-//  Author : Sitian Qian
-//  Date   : 2026 (implementation on CMSSW_20_1_0_pre1,
-//           GeometryExtendedRun4D110)
-//
-//  Shower parametrization after GFlash:
-//    * E. Longo, I. Sestili, Nucl. Instrum. Meth. 128 (1975) 283
-//      (Gamma-function longitudinal profile);
-//    * G. Grindhammer, M. Rudowicz, S. Peters,
-//      Nucl. Instrum. Meth. A290 (1990) 469 (GFlash);
-//    * G. Grindhammer, S. Peters, hep-ex/0001020
-//      (transverse parameterization in sampling calorimeters).
-//  The calo-entry design follows Jan Eysermans' HGCAL FastSim
-//  demonstrator (CMSSW_11_3_0_pre3, 2021).
-// ---------------------------------------------------------------------------
-
 #ifndef FastSimulation_CalorimeterProperties_HGCalReverseCalibration_H
 #define FastSimulation_CalorimeterProperties_HGCalReverseCalibration_H
 
@@ -83,8 +65,12 @@ public:
 
   bool fluctuate() const { return fluctuate_; }
 
-private:
+  /// Reconstruction dE/dx weight for a (1-based) layer, MeV per MIP.
+  /// Public so alternative shower models can close the weighted-energy
+  /// sum the same way reconstruction does.
   double weight(int layer) const;
+
+private:
   double thicknessCorrection(int thickness) const;
 
   std::vector<double> dEdXWeights_;           ///< MeV per MIP, indexed by layer

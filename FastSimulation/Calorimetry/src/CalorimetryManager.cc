@@ -11,6 +11,7 @@
 #include "FastSimulation/CalorimeterProperties/interface/HGCalProperties.h"
 #include "FastSimulation/CalorimeterProperties/interface/HGCalReverseCalibration.h"
 #include "FastSimulation/ShowerDevelopment/interface/HGCalGFlashModel.h"
+#include "FastSimulation/ShowerDevelopment/interface/HGCalTMMShower.h"
 #include "FastSimulation/ShowerDevelopment/interface/HGCalHadronModel.h"
 #include "FastSimulation/CaloHitMakers/interface/HGCalHitMaker.h"
 #include "FastSimulation/Event/interface/FSimEvent.h"
@@ -156,6 +157,11 @@ CalorimetryManager::CalorimetryManager(const edm::ParameterSet& fastCalo,
       edm::LogInfo("CalorimetryManager")
           << "HGCAL CE-E FastSim enabled: " << hgcalProperties_->nLayers() << " layers, "
           << hgcalGeometry_->nCachedWafers() << " cached wafers";
+      if (hgc.existsAs<bool>("simulateTMMSplat") && hgc.getParameter<bool>("simulateTMMSplat")) {
+        hgcalTMM_ = std::make_unique<HGCalTMMShower>(hgc.getParameter<std::string>("tmmParamsFile"));
+        edm::LogInfo("CalorimetryManager") << "HGCAL EM model: TMM splatting ("
+                                           << hgc.getParameter<std::string>("tmmParamsFile") << ")";
+      }
     }
   }
 
@@ -1041,7 +1047,23 @@ void CalorimetryManager::HGCalShowerSimulation(const FSimTrack& myTrack,
   const double dir[3] = {pp.momentum().X() / pmag, pp.momentum().Y() / pmag, pp.momentum().Z() / pmag};
 
   std::vector<HGCalShowerSpot> spots;
-  hgcalShower_->compute(e0, entry, dir, std::abs(myTrack.type()) == 22, random, spots);
+  if (hgcalTMM_) {
+    // TMM splatting: table-driven learned-mixture model (see
+    // ShowerDevelopment/doc/TMM_SPLAT_INTEGRATION.md)
+    double zl[HGCalTMMShower::kNLay], lw[HGCalTMMShower::kNLay];
+    for (int l = 0; l < HGCalTMMShower::kNLay; ++l) {
+      const int lay1 = l + 1;
+      zl[l] = (lay1 <= HGCalGFlashModel::kNCEE || !hgcalGeometryHE_)
+                  ? hgcalGeometry_->layerZ(lay1)
+                  : hgcalGeometryHE_->layerZ(lay1 - HGCalGFlashModel::kNCEE);
+      lw[l] = hgcalCalibration_ ? hgcalCalibration_->weight(lay1) : 1.0;
+    }
+    auto flat = [random]() { return random->flatShoot(); };
+    auto gauss = [random]() { return random->gaussShoot(); };
+    hgcalTMM_->computeSpots(e0, entry, dir, zl, lw, flat, gauss, spots);
+  } else {
+    hgcalShower_->compute(e0, entry, dir, std::abs(myTrack.type()) == 22, random, spots);
+  }
   if (spots.empty())
     return;
 

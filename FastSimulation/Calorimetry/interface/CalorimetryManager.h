@@ -45,6 +45,7 @@ class HGCalFastGeometry;
 class HGCalProperties;
 class HGCalReverseCalibration;
 class HGCalGFlashModel;
+class HGCalTMMShower;
 class HGCalHadronModel;
 
 struct CaloProductContainer {
@@ -163,6 +164,7 @@ private:
   std::unique_ptr<HGCalProperties> hgcalProperties_;
   std::unique_ptr<HGCalReverseCalibration> hgcalCalibration_;
   std::unique_ptr<HGCalGFlashModel> hgcalShower_;
+  std::unique_ptr<HGCalTMMShower> hgcalTMM_;  ///< optional TMM splatting EM model
   std::unique_ptr<HGCalHadronModel> hgcalHadron_;
   bool simulateHGCal_ = false;
 

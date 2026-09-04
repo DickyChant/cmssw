@@ -322,6 +322,9 @@ hgcalHadronParameters = cms.PSet(
 # The block CalorimetryManager reads.
 HGCalBlock = cms.PSet(
     simulateHGCal = cms.bool(True),
+    # Optional table-driven TMM splatting EM model (off = GFlash):
+    simulateTMMSplat = cms.bool(False),
+    tmmParamsFile = cms.string(""),
     HGCalCalorimeterProperties = hgcalCalorimeterProperties,
     ShowerParameters = hgcalShowerParameters,
     ReverseCalibration = hgcalReverseCalibration,
