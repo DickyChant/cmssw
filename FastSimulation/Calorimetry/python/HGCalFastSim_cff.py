@@ -38,23 +38,12 @@ _layerX0 = [
 # first CE-H bin starts at the fixed CE-E total depth (25.63 X0), so it collects
 # the whole Gamma tail no matter how the entries are chosen.
 #
-# MEASURED, 50 GeV photons vs the V16 FullSim reference (target 0.071% of the
-# shower in CE-H):
-#
-#   sigmaLnAlpha = 0.419 (tuned)   ->  1.04%   15x too much
-#   sigmaLnAlpha = 0               ->  0.169%  2.4x too much
-#
-# The second number matches the analytic tail Q(alpha=5.68, beta*t=15.2) = 0.17%,
-# which confirms the mechanism. So the punch-through is over-predicted twice
-# over: the mean-parameter Gamma tail is itself 2.4x too fat, and the log-normal
-# alpha fluctuation inflates it a further 6x because Q is strongly convex in
-# 1/alpha, so low-alpha events dominate the deep tail.
-#
-# This is a diagnostic of the longitudinal model, not of CE-H. The CE-E-only
-# profile comparison could not see it -- CE-E layer fractions are dominated by
-# the peak, where a fat tail costs almost nothing. Fixing it means refitting
-# sigmaLnAlpha (and rhoLnAlphaT, currently +0.51) against the punch-through and
-# the CE-E spread jointly, rather than damping the tail here.
+# 2026-08: the punch-through excess (up to x24 recorded CE-H energy) was fixed
+# twice over: the (sigma, rho) population was refit energy dependent on uniform
+# FullSim photons (Longitudinal below), and the CE-H deposit no longer
+# extrapolates the Gamma at all -- see the CEHTail block. With both, the 50 GeV
+# punch-through closes to ~x1. These entries now only set the CE-H bin
+# positions for the tail's exp(-d/lambda) and remain not a tuning handle.
 _cehFirstX0 = 3.6    # first CE-H layer (the CE-E/CE-H gap is not resolved here)
 _cehLayerX0 = 3.2    # per CE-H layer thereafter
 _layerX0 += [_cehFirstX0] + [_cehLayerX0] * 20
@@ -79,17 +68,32 @@ hgcalShowerParameters = cms.PSet(
         # and the first core layer 1.68 -> 3.09. Kept the values below, which are
         # the better description empirically. The refit needs a better target than
         # a single convolved Gamma before it can replace these.
-        alphaSlope   = cms.double(0.648),
-        alphaConst   = cms.double(0.187),
-        tSlope       = cms.double(1.030),
-        tConst       = cms.double(-0.846),
+        # 2026-08: superseded by a forward-folded recalibration on 100k uniform
+        # (flat ln E, 1-1000 GeV) FullSim photons: the generator (Gamma windows,
+        # explicit conversion, eta = 2 path scaling) is simulated, the SAME
+        # moment estimator FullSim was measured with is run on it, and the
+        # parameters are tuned until the estimator-space statistics match.
+        # This is what makes the explicit-conversion double counting drop out.
+        # Previous values: 0.648/0.187, 1.030/-0.846.
+        alphaSlope   = cms.double(0.5945),
+        alphaConst   = cms.double(0.3401),
+        tSlope       = cms.double(1.0495),
+        tConst       = cms.double(-1.7523),
 
-        # Event-to-event fluctuations of (ln alpha, ln T).
-        # NOTE: these come from a moment estimator, which correlates alpha and T
-        # through their shared moments and inflates rho (measured 0.95, whereas
-        # Grindhammer-Peters expects ~0.51 here). Per-event Gamma fits are needed
-        # before this correlation should be trusted; the widths are also known to
-        # be ~13% low because only (alpha, T) fluctuate globally.
+        # Event-to-event fluctuations of (ln T, ln alpha): the SAMPLING
+        # CALORIMETER term, in the Grindhammer-Peters forms
+        #   sigma(ln T)     = 1 / (sigmaLnTInv[0]     + sigmaLnTInv[1]     ln y)
+        #   sigma(ln alpha) = 1 / (sigmaLnAlphaInv[0] + sigmaLnAlphaInv[1] ln y)
+        #   rho             = clamp(rhoLnAlphaT[0] + rhoLnAlphaT[1] ln y, 0, 0.97)
+        # Measured on 100k uniform FullSim photons with per-event Gamma fits,
+        # then forward-folded as for the means above. The widths are 1.8-2.4x
+        # the G-P homogeneous curves (the sampling excess), and 1/sigma is
+        # linear in ln y over the full 5-1000 GeV range as G-P predict.
+        # rho ~ 0.95 IS the fitted value (previous doubt about moment-estimator
+        # inflation resolved: per-event fits and drift-corrected binning give
+        # the same number; G-P quote ~0.8 for sampling devices).
+        # At 5/50/500 GeV: sigma_lnT 0.39/0.25/0.18, sigma_lnA 0.47/0.37/0.30,
+        # rho 0.97/0.95/0.94.  Previous constants: 0.257/0.419/0.51.
         # Sample the photon conversion depth explicitly, -ln(u) * 9/7 X0.
         #
         # It was first assumed that conversion was already inside tConst, since
@@ -101,9 +105,27 @@ hgcalShowerParameters = cms.PSet(
         # while leaving the total unchanged (1.017 -> 1.013).
         applyPhotonConversion = cms.bool(True),
 
-        sigmaLnAlpha = cms.double(0.419),
-        sigmaLnT     = cms.double(0.257),
-        rhoLnAlphaT  = cms.double(0.51),
+        sigmaLnTInv      = cms.vdouble(-1.7268, 0.6590),
+        sigmaLnAlphaInv  = cms.vdouble(0.1057, 0.3046),
+        rhoLnAlphaT      = cms.vdouble(1.0530, -0.0123),
+    ),
+
+    CEHTail = cms.PSet(
+        # Punch-through into CE-H: anchored attenuation instead of extrapolating
+        # the fitted Gamma 10-20 X0 past CE-E (which over-predicts the recorded
+        # CE-H energy by up to x24 -- the fitted Gamma describes the CE-E bulk,
+        # not the deep tail). Beyond shower max the real profile relaxes to the
+        # attenuation of the most penetrating few-MeV photons; measured on
+        # FullSim CE-H layer profiles: lambda = 3.0 X0, energy independent
+        # (4.2 at 5 GeV falling to a 3.0 plateau above ~15 GeV).
+        # dep_k = g0 * dens(last CE-E layer) * exp(-(d_k - d_exit)/lambda) * dX0_k
+        # g0 is the measured CE-H normalization (0.4); with it the 50 GeV
+        # punch-through closes to ~x1 (was x24) and the mean leaked fraction
+        # closes within x1.2-1.7 for E > 4 GeV. Below that the model still
+        # over-predicts the (tiny, <0.02%) leak by up to x8.
+        apply     = cms.bool(True),
+        lambdaAtt = cms.double(3.0),   # X0, along the trajectory
+        g0        = cms.double(0.4),
     ),
 
     CassetteSplit = cms.PSet(
@@ -243,17 +265,41 @@ hgcalHadronParameters = cms.PSet(
     maxSpots       = cms.uint32(2000),
 
     Longitudinal = cms.PSet(
-        # Gamma in LAYER units over the full 47-layer stack. Layer units rather
-        # than interaction lengths because CE-E and CE-H differ in material, so a
-        # single lambda scale would not span both; the geometry supplies the
-        # positions. Fitted on pions: residual ~0.16-0.19.
-        alphaSlope   = cms.double(0.5350),
-        alphaConst   = cms.double(-1.1245),
-        tSlope       = cms.double(2.6730),
-        tConst       = cms.double(-5.5673),
-        # Hadronic showers fluctuate more than electromagnetic ones.
-        sigmaLnAlpha = cms.double(0.35),
-        sigmaLnT     = cms.double(0.30),
+        # 2026-08: two-compartment correlated model in the structure of the 1989
+        # three-Gamma parametrization (SLAC-PUB-5072: profile components with
+        # fluctuating fractions and a fully correlated parameter draw), replacing
+        # the single 47-layer Gamma, which could not carry the first-interaction
+        # and pi0-fraction fluctuations (longitudinal EMD 0.29-0.39 against
+        # FullSim; the two-compartment splat model reached 0.04-0.12).
+        #
+        #   f = (1-fH) Gamma(aE, TE)  [CE-E, per-layer X0 table]
+        #     +    fH  Gamma(aH, TH)  [CE-H, cehDepthPerLayer per layer]
+        #
+        #   theta   = (ln aE, ln TE, ln aH, ln TH, logit fH)
+        #   theta_i = muSlope_i ln y + muConst_i
+        #           + clamp(sigmaSlope_i ln y + sigmaConst_i, 0.05, 5) (L z)_i
+        # with L the Cholesky factor (row-major lower triangle) of the measured
+        # correlation matrix. T is the MEAN depth (moment convention,
+        # beta = alpha/T), not the peak as in the electromagnetic block.
+        #
+        # Population measured on 68k uniform (flat ln E, 1.5-1000 GeV) FullSim
+        # pions, per-event compartment moments, means/sigmas fitted linear in
+        # ln y, correlations energy independent. The wide logit-normal fH
+        # (sigma ~ 2.6) produces the late-starting punch-through class:
+        # P(fH > 0.9) = 0.4% / 27% / 35% at 5/50/500 GeV in FullSim,
+        # reproduced as 5% / 18% / 38% by the draw.
+        muSlope    = cms.vdouble(0.1814, 0.0493, -0.2029, 0.2232, 0.6441),
+        muConst    = cms.vdouble(0.6044, 2.2923, 2.9161, 0.9289, -5.6241),
+        sigmaSlope = cms.vdouble(0.0611, -0.0199, -0.1754, -0.1021, 0.1150),
+        sigmaConst = cms.vdouble(0.4289, 0.4420, 2.6051, 1.4618, 1.6001),
+        cholCorr   = cms.vdouble(1.0000,
+                                 0.8138, 0.5811,
+                                 -0.3007, -0.1163, 0.9466,
+                                 -0.2623, 0.1384, 0.3921, 0.8708,
+                                 -0.2845, 0.5489, 0.2362, 0.3141, 0.6807),
+        # CE-H compartment depth axis: X0-equivalent per CE-H layer, matching
+        # the axis the population was fitted on.
+        cehDepthPerLayer = cms.double(3.59),
     ),
 
     # Visible-energy suppression relative to an EM shower of the same energy.

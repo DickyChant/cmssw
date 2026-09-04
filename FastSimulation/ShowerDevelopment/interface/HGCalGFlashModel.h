@@ -1,3 +1,21 @@
+// ---------------------------------------------------------------------------
+// HGCAL FastSim (GFlash revival on the Phase-2 V16 geometry).
+//
+//  Author : Sitian Qian
+//  Date   : 2026 (implementation on CMSSW_20_1_0_pre1,
+//           GeometryExtendedRun4D110)
+//
+//  Shower parametrization after GFlash:
+//    * E. Longo, I. Sestili, Nucl. Instrum. Meth. 128 (1975) 283
+//      (Gamma-function longitudinal profile);
+//    * G. Grindhammer, M. Rudowicz, S. Peters,
+//      Nucl. Instrum. Meth. A290 (1990) 469 (GFlash);
+//    * G. Grindhammer, S. Peters, hep-ex/0001020
+//      (transverse parameterization in sampling calorimeters).
+//  The calo-entry design follows Jan Eysermans' HGCAL FastSim
+//  demonstrator (CMSSW_11_3_0_pre3, 2021).
+// ---------------------------------------------------------------------------
+
 #ifndef FastSimulation_ShowerDevelopment_HGCalGFlashModel_H
 #define FastSimulation_ShowerDevelopment_HGCalGFlashModel_H
 
@@ -84,6 +102,14 @@ public:
   double meanAlpha(double y) const;
   double meanT(double y) const;
 
+  /// Event-to-event widths of (ln T, ln alpha) and their correlation, in the
+  /// Grindhammer-Peters sampling-calorimeter forms 1/(s1 + s2 ln y) and
+  /// r1 + r2 ln y. A sampling calorimeter fluctuates more than the homogeneous
+  /// medium at low energy and the excess dies away as 1/ln y.
+  double sigmaLnT(double y) const;
+  double sigmaLnAlpha(double y) const;
+  double rhoLnAlphaT(double y) const;
+
   /// Cassette split: fraction of the pair energy on the Pb side at depth x0.
   double wSplit(double x0, double y) const;
 
@@ -99,7 +125,14 @@ private:
 
   // longitudinal
   double a0_, a1_, t0_, t1_;
-  double sigmaLnAlpha_, sigmaLnT_, rhoLnAlphaT_;
+  // sigma(ln T) = 1/(sT1_ + sT2_ ln y), sigma(ln alpha) = 1/(sA1_ + sA2_ ln y),
+  // rho = clamp(r1_ + r2_ ln y, 0, 0.97)
+  double sT1_, sT2_, sA1_, sA2_, r1_, r2_;
+
+  // CE-H tail: anchored attenuation instead of extrapolating the Gamma.
+  // dep_k = g0 * (last CE-E layer density) * exp(-(d_k - d_exit)/lambda) * dX0_k
+  double cehLambda_, cehG0_;
+  bool applyCehTail_;
 
   // cassette split w = wa (1 - exp(wb x0)), each linear in ln(y)
   double wa0_, wa1_, wb0_, wb1_;

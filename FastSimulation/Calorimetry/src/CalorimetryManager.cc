@@ -147,7 +147,9 @@ CalorimetryManager::CalorimetryManager(const edm::ParameterSet& fastCalo,
                                                        hgcalGeometry_.get(),
                                                        hgcalGeometryHE_.get());
       hgcalHadron_ = std::make_unique<HGCalHadronModel>(hgc.getParameter<edm::ParameterSet>("HadronParameters"),
-                                                       hgcalGeometry_.get(), hgcalGeometryHE_.get());
+                                                       hgcalGeometry_.get(),
+                                                       hgcalGeometryHE_.get(),
+                                                       hgcalProperties_.get());
       edm::LogInfo("CalorimetryManager")
           << "HGCAL CE-H FastSim enabled: " << hgcalGeometryHE_->nLayers() << " layers, "
           << hgcalGeometryHE_->nCachedWafers() << " cached wafers";

@@ -33,9 +33,20 @@ HGCalGFlashModel::HGCalGFlashModel(const edm::ParameterSet& ps,
   a1_ = lon.getParameter<double>("alphaConst");
   t0_ = lon.getParameter<double>("tSlope");
   t1_ = lon.getParameter<double>("tConst");
-  sigmaLnAlpha_ = lon.getParameter<double>("sigmaLnAlpha");
-  sigmaLnT_ = lon.getParameter<double>("sigmaLnT");
-  rhoLnAlphaT_ = lon.getParameter<double>("rhoLnAlphaT");
+  const std::vector<double> sTInv = lon.getParameter<std::vector<double>>("sigmaLnTInv");
+  sT1_ = sTInv.at(0);
+  sT2_ = sTInv.at(1);
+  const std::vector<double> sAInv = lon.getParameter<std::vector<double>>("sigmaLnAlphaInv");
+  sA1_ = sAInv.at(0);
+  sA2_ = sAInv.at(1);
+  const std::vector<double> rho = lon.getParameter<std::vector<double>>("rhoLnAlphaT");
+  r1_ = rho.at(0);
+  r2_ = rho.at(1);
+
+  const edm::ParameterSet ct = ps.getParameter<edm::ParameterSet>("CEHTail");
+  applyCehTail_ = ct.getParameter<bool>("apply");
+  cehLambda_ = ct.getParameter<double>("lambdaAtt");
+  cehG0_ = ct.getParameter<double>("g0");
 
   const edm::ParameterSet cw = ps.getParameter<edm::ParameterSet>("CassetteSplit");
   wa0_ = cw.getParameter<double>("aSlope");
@@ -61,6 +72,10 @@ HGCalGFlashModel::HGCalGFlashModel(const edm::ParameterSet& ps,
 
 double HGCalGFlashModel::meanAlpha(double y) const { return a0_ * std::log(y) + a1_; }
 double HGCalGFlashModel::meanT(double y) const { return t0_ * std::log(y) + t1_; }
+
+double HGCalGFlashModel::sigmaLnT(double y) const { return 1. / std::max(sT1_ + sT2_ * std::log(y), 1.0); }
+double HGCalGFlashModel::sigmaLnAlpha(double y) const { return 1. / std::max(sA1_ + sA2_ * std::log(y), 1.0); }
+double HGCalGFlashModel::rhoLnAlphaT(double y) const { return std::clamp(r1_ + r2_ * std::log(y), 0., 0.97); }
 
 double HGCalGFlashModel::wSplit(double x0, double y) const {
   const double lny = std::log(y);
@@ -99,11 +114,14 @@ void HGCalGFlashModel::compute(double e0,
   const double mLnAlpha = std::log(std::max(meanAlpha(y), 1.05));
   const double mLnT = std::log(std::max(meanT(y), 0.2));
 
+  const double sT = sigmaLnT(y);
+  const double sA = sigmaLnAlpha(y);
+  const double rho = rhoLnAlphaT(y);
+
   const double z1 = random->gaussShoot(0., 1.);
   const double z2 = random->gaussShoot(0., 1.);
-  const double lnAlpha = mLnAlpha + sigmaLnAlpha_ * z1;
-  const double lnT =
-      mLnT + sigmaLnT_ * (rhoLnAlphaT_ * z1 + std::sqrt(std::max(1. - rhoLnAlphaT_ * rhoLnAlphaT_, 0.)) * z2);
+  const double lnT = mLnT + sT * z1;
+  const double lnAlpha = mLnAlpha + sA * (rho * z1 + std::sqrt(std::max(1. - rho * rho, 0.)) * z2);
 
   const double alpha = std::max(std::exp(lnAlpha), 1.05);
   const double T = std::max(std::exp(lnT), 0.2);
@@ -134,9 +152,25 @@ void HGCalGFlashModel::compute(double e0,
     const double b = (props_->frontX0(L) + props_->layerX0(L)) * pathScale - x0Offset;
     if (b <= 0.)
       continue;
-    const double lo = gammaCdf(alpha, beta * std::max(f, 0.));
-    const double hi = gammaCdf(alpha, beta * b);
-    eLayer[L] = std::max(hi - lo, 0.);
+    if (applyCehTail_ && static_cast<int>(L) > kNCEE) {
+      // CE-H: the fitted Gamma describes the CE-E bulk; extrapolating its tail
+      // 10-20 X0 further over-predicts the recorded punch-through by up to x24.
+      // Beyond shower max the real profile relaxes to the attenuation of the
+      // most penetrating few-MeV photons, measured on FullSim as
+      // lambda = 3.0 X0, nearly energy independent. Anchor the tail on the
+      // REALIZED last CE-E layer (inside the fitted region, so no extrapolation
+      // and the CE-E/CE-H correlation is kept):
+      //   dep_k = g0 * dens(last CE-E) * exp(-(d_k - d_exit)/lambda) * dX0_k
+      // g0 = 0.4 is the measured CE-H normalization (sampling continuity), not
+      // a shape damping; the shape is carried entirely by lambda.
+      const double dExit = props_->frontX0(kNCEE + 1) * pathScale - x0Offset;
+      const double densLast = eLayer[kNCEE] / std::max(props_->layerX0(kNCEE) * pathScale, 1e-9);
+      eLayer[L] = cehG0_ * densLast * std::exp(-(b - dExit) / cehLambda_) * (props_->layerX0(L) * pathScale);
+    } else {
+      const double lo = gammaCdf(alpha, beta * std::max(f, 0.));
+      const double hi = gammaCdf(alpha, beta * b);
+      eLayer[L] = std::max(hi - lo, 0.);
+    }
     norm += eLayer[L];
   }
   if (norm <= 0.)

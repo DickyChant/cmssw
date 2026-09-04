@@ -1,5 +1,6 @@
 #include "FastSimulation/ShowerDevelopment/interface/HGCalHadronModel.h"
 #include "FastSimulation/CaloGeometryTools/interface/HGCalFastGeometry.h"
+#include "FastSimulation/CalorimeterProperties/interface/HGCalProperties.h"
 #include "FastSimulation/Utilities/interface/RandomEngineAndDistribution.h"
 
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
@@ -19,15 +20,24 @@ namespace {
 
 HGCalHadronModel::HGCalHadronModel(const edm::ParameterSet& ps,
                                    const HGCalFastGeometry* cee,
-                                   const HGCalFastGeometry* ceh)
-    : cee_(cee), ceh_(ceh) {
+                                   const HGCalFastGeometry* ceh,
+                                   const HGCalProperties* props)
+    : cee_(cee), ceh_(ceh), props_(props) {
   const edm::ParameterSet lon = ps.getParameter<edm::ParameterSet>("Longitudinal");
-  a0_ = lon.getParameter<double>("alphaSlope");
-  a1_ = lon.getParameter<double>("alphaConst");
-  t0_ = lon.getParameter<double>("tSlope");
-  t1_ = lon.getParameter<double>("tConst");
-  sigmaLnAlpha_ = lon.getParameter<double>("sigmaLnAlpha");
-  sigmaLnT_ = lon.getParameter<double>("sigmaLnT");
+  const std::vector<double> muS = lon.getParameter<std::vector<double>>("muSlope");
+  const std::vector<double> muC = lon.getParameter<std::vector<double>>("muConst");
+  const std::vector<double> sgS = lon.getParameter<std::vector<double>>("sigmaSlope");
+  const std::vector<double> sgC = lon.getParameter<std::vector<double>>("sigmaConst");
+  for (int i = 0; i < kNPar; ++i) {
+    muSlope_[i] = muS.at(i);
+    muConst_[i] = muC.at(i);
+    sigmaSlope_[i] = sgS.at(i);
+    sigmaConst_[i] = sgC.at(i);
+  }
+  const std::vector<double> ch = lon.getParameter<std::vector<double>>("cholCorr");
+  for (int i = 0; i < kNPar * (kNPar + 1) / 2; ++i)
+    chol_[i] = ch.at(i);
+  cehDepthPerLayer_ = lon.getParameter<double>("cehDepthPerLayer");
 
   eh0_ = ps.getParameter<double>("ehSlope");
   eh1_ = ps.getParameter<double>("ehConst");
@@ -44,9 +54,6 @@ HGCalHadronModel::HGCalHadronModel(const edm::ParameterSet& ps,
   maxSpots_ = ps.getParameter<unsigned>("maxSpots");
 }
 
-double HGCalHadronModel::meanAlpha(double y) const { return a0_ * std::log(y) + a1_; }
-double HGCalHadronModel::meanT(double y) const { return t0_ * std::log(y) + t1_; }
-
 double HGCalHadronModel::ehRatio(double y) const {
   // Measured 0.623 / 0.557 / 0.548 at 5 / 50 / 500 GeV: falls with energy as the
   // neutral-pion fraction grows, so a single constant will not do.
@@ -59,39 +66,68 @@ void HGCalHadronModel::compute(double e0,
                                const RandomEngineAndDistribution* random,
                                std::vector<HGCalShowerSpot>& spots) const {
   spots.clear();
-  if (e0 <= 0. || cee_ == nullptr)
+  if (e0 <= 0. || cee_ == nullptr || props_ == nullptr)
     return;
 
   const double y = e0 / ecrit_;
   if (y <= 1.)
     return;
+  const double lny = std::log(y);
 
-  // Fluctuate the shape. Hadronic showers fluctuate more than electromagnetic
-  // ones, which is carried by the configured widths.
-  const double alpha = std::max(std::exp(std::log(std::max(meanAlpha(y), 1.05)) +
-                                         sigmaLnAlpha_ * random->gaussShoot(0., 1.)),
-                                1.05);
-  const double T = std::max(std::exp(std::log(std::max(meanT(y), 1.0)) +
-                                     sigmaLnT_ * random->gaussShoot(0., 1.)),
-                            1.0);
-  const double beta = (alpha - 1.) / T;
+  // ---- correlated draw of the 5 shape parameters -------------------------
+  // theta = mu(ln y) + D(sigma(ln y)) . L . z. The correlations matter: aE-TE
+  // at +0.81 (early first interaction -> both compartments shift together) and
+  // TH-fH at +0.52 (late showers put more into CE-H).
+  double z[kNPar];
+  for (int i = 0; i < kNPar; ++i)
+    z[i] = random->gaussShoot(0., 1.);
+  double theta[kNPar];
+  int k = 0;
+  for (int i = 0; i < kNPar; ++i) {
+    double corr = 0.;
+    for (int j = 0; j <= i; ++j)
+      corr += chol_[k++] * z[j];
+    const double sig = std::clamp(sigmaSlope_[i] * lny + sigmaConst_[i], 0.05, 5.0);
+    theta[i] = (muSlope_[i] * lny + muConst_[i]) + sig * corr;
+  }
+  const double aE = std::clamp(std::exp(theta[0]), 1.05, 200.);
+  const double TE = std::clamp(std::exp(theta[1]), 1.0, 60.);
+  const double aH = std::clamp(std::exp(theta[2]), 0.2, 200.);
+  const double TH = std::clamp(std::exp(theta[3]), 1.0, 80.);
+  const double fH = 1. / (1. + std::exp(-theta[4]));
+  // MEAN-depth convention (moment estimator): beta = alpha / T.
+  const double bE = aE / TE;
+  const double bH = aH / TH;
 
   // Visible energy: only a fraction of the incident energy becomes silicon
   // signal, and less than for an electromagnetic shower of the same energy.
   const double eVisible = e0 * ehRatio(y);
 
-  // Layer fractions from the Gamma integrated over each layer, in layer units.
+  // ---- layer fractions: two compartment Gammas ---------------------------
+  // CE-E on its per-layer X0 table; CE-H on a uniform local depth axis, both
+  // exactly as in the parameter derivation. Each compartment is normalized on
+  // its own support, then weighted by (1-fH) / fH: fH IS the CE-H energy
+  // share, not a tail integral.
   std::vector<double> eLayer(kNTotal + 1, 0.);
-  double norm = 0.;
-  for (int L = 1; L <= kNTotal; ++L) {
-    const double f = gammaCdf(alpha, beta * L) - gammaCdf(alpha, beta * (L - 1));
-    eLayer[L] = std::max(f, 0.);
-    norm += eLayer[L];
+  double normE = 0., normH = 0.;
+  for (int L = 1; L <= kNCEE; ++L) {
+    const double f = props_->frontX0(L);
+    const double b = f + props_->layerX0(L);
+    eLayer[L] = std::max(gammaCdf(aE, bE * b) - gammaCdf(aE, bE * f), 0.);
+    normE += eLayer[L];
   }
-  if (norm <= 0.)
+  for (int L = kNCEE + 1; L <= kNTotal; ++L) {
+    const double f = (L - kNCEE - 1) * cehDepthPerLayer_;
+    const double b = f + cehDepthPerLayer_;
+    eLayer[L] = std::max(gammaCdf(aH, bH * b) - gammaCdf(aH, bH * f), 0.);
+    normH += eLayer[L];
+  }
+  if (normE <= 0. && normH <= 0.)
     return;
-  for (int L = 1; L <= kNTotal; ++L)
-    eLayer[L] *= eVisible / norm;
+  for (int L = 1; L <= kNCEE; ++L)
+    eLayer[L] *= (normE > 0.) ? eVisible * (1. - fH) / normE : 0.;
+  for (int L = kNCEE + 1; L <= kNTotal; ++L)
+    eLayer[L] *= (normH > 0.) ? eVisible * fH / normH : 0.;
 
   // Basis perpendicular to the shower axis (as in the electromagnetic model).
   double u1[3], u2[3];
@@ -116,6 +152,13 @@ void HGCalHadronModel::compute(double e0,
   }
 
   const int zside = (dir[2] >= 0.) ? 1 : -1;
+
+  // Transverse scale: tau relative to the energy-weighted global mean depth,
+  // expressed in layers as before. Convert the two compartment means back to a
+  // global mean layer for the tau axis.
+  const double meanLayerE = TE / std::max(props_->totalX0() / kNCEE, 1e-3);
+  const double meanLayerH = kNCEE + TH / cehDepthPerLayer_;
+  const double meanLayer = std::clamp((1. - fH) * meanLayerE + fH * meanLayerH, 1., double(kNTotal));
 
   for (int L = 1; L <= kNTotal; ++L) {
     if (eLayer[L] <= 0.)
@@ -142,7 +185,7 @@ void HGCalHadronModel::compute(double e0,
     n = std::max(1u, std::min(n, maxSpots_));
     const double eSpot = eLayer[L] / n;
 
-    const double tau = static_cast<double>(L) / std::max(T, 1.0);
+    const double tau = static_cast<double>(L) / meanLayer;
     const double rc = std::max(r68Slope_ * tau + r68Const_, 0.1) * coreOverR68_;
     const double rt = tailOverCore_ * rc;
 
