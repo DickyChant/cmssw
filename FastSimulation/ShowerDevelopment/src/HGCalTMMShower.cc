@@ -17,8 +17,7 @@ namespace {
   double tLogPdf(double d2, double sig2, double nu) {
     if (nu > 1e5)
       return -d2 / (2.0 * sig2) - std::log(2.0 * M_PI * sig2);
-    return std::lgamma(0.5 * (nu + 2.0)) - std::lgamma(0.5 * nu) -
-           std::log(M_PI * nu * sig2) -
+    return std::lgamma(0.5 * (nu + 2.0)) - std::lgamma(0.5 * nu) - std::log(M_PI * nu * sig2) -
            0.5 * (nu + 2.0) * std::log1p(d2 / (nu * sig2));
   }
 
@@ -34,8 +33,7 @@ namespace {
     std::string s;
     in >> s;
     if (s != tag)
-      throw std::runtime_error("HGCalTMMShower: expected '" + tag +
-                               "', got '" + s + "'");
+      throw std::runtime_error("HGCalTMMShower: expected '" + tag + "', got '" + s + "'");
   }
 
   // interpolation helpers on an ascending grid
@@ -68,9 +66,7 @@ namespace {
   }
 }  // namespace
 
-HGCalTMMShower::HGCalTMMShower(const std::string& paramFile) {
-  loadParams(paramFile);
-}
+HGCalTMMShower::HGCalTMMShower(const std::string& paramFile) { loadParams(paramFile); }
 
 void HGCalTMMShower::loadParams(const std::string& paramFile) {
   std::ifstream in(paramFile);
@@ -146,8 +142,7 @@ void HGCalTMMShower::loadParams(const std::string& paramFile) {
     throw std::runtime_error("HGCalTMMShower: no populations loaded");
 }
 
-void HGCalTMMShower::drawDeck(double x, UniformRng flat, GaussRng gauss,
-                              int& K, std::vector<double>& theta) const {
+void HGCalTMMShower::drawDeck(double x, UniformRng flat, GaussRng gauss, int& K, std::vector<double>& theta) const {
   // 1. K ~ P(K | x)
   int j;
   double t;
@@ -155,8 +150,7 @@ void HGCalTMMShower::drawDeck(double x, UniformRng flat, GaussRng gauss,
   std::vector<double> pk(kMax_);
   double tot = 0.0;
   for (int k = 0; k < kMax_; ++k) {
-    pk[k] = (1 - t) * pK_[size_t(j) * kMax_ + k] +
-            t * pK_[size_t(j + 1) * kMax_ + k];
+    pk[k] = (1 - t) * pK_[size_t(j) * kMax_ + k] + t * pK_[size_t(j + 1) * kMax_ + k];
     tot += pk[k];
   }
   double u = flat() * tot, acc = 0.0;
@@ -183,13 +177,11 @@ void HGCalTMMShower::drawDeck(double x, UniformRng flat, GaussRng gauss,
   bracket(pop->xCenters, x, jb, tb);
   std::vector<double> sig(D), C(size_t(D) * D);
   for (int d = 0; d < D; ++d)
-    sig[d] = (1 - tb) * pop->sigma[size_t(jb) * D + d] +
-             tb * pop->sigma[size_t(jb + 1) * D + d];
+    sig[d] = (1 - tb) * pop->sigma[size_t(jb) * D + d] + tb * pop->sigma[size_t(jb + 1) * D + d];
   for (int a = 0; a < D; ++a)
     for (int b = 0; b < D; ++b)
       C[size_t(a) * D + b] =
-          (1 - tb) * pop->corr[(size_t(jb) * D + a) * D + b] +
-          tb * pop->corr[(size_t(jb + 1) * D + a) * D + b];
+          (1 - tb) * pop->corr[(size_t(jb) * D + a) * D + b] + tb * pop->corr[(size_t(jb + 1) * D + a) * D + b];
   cholesky(C, D);
   std::vector<double> z(D), zc(D);
   for (int d = 0; d < D; ++d)
@@ -202,8 +194,7 @@ void HGCalTMMShower::drawDeck(double x, UniformRng flat, GaussRng gauss,
   }
   theta.assign(D, 0.0);
   for (int d = 0; d < D; ++d) {
-    double mean = pop->meanCoef[d] + pop->meanCoef[size_t(D) + d] * x +
-                  pop->meanCoef[size_t(2) * D + d] * x * x;
+    double mean = pop->meanCoef[d] + pop->meanCoef[size_t(D) + d] * x + pop->meanCoef[size_t(2) * D + d] * x * x;
     theta[d] = mean + zc[d] * sig[d];
   }
   // 3. last dim: empirical quantile marginal for ln Ew
@@ -214,19 +205,15 @@ void HGCalTMMShower::drawDeck(double x, UniformRng flat, GaussRng gauss,
   double fi = (pos - 0.001) / 0.998 * (NQ - 1);
   int qi = std::max(0, std::min(NQ - 2, int(fi)));
   double qt = fi - qi;
-  double q0 = (1 - tb) * pop->qEw[size_t(jb) * NQ + qi] +
-              tb * pop->qEw[size_t(jb + 1) * NQ + qi];
-  double q1 = (1 - tb) * pop->qEw[size_t(jb) * NQ + qi + 1] +
-              tb * pop->qEw[size_t(jb + 1) * NQ + qi + 1];
+  double q0 = (1 - tb) * pop->qEw[size_t(jb) * NQ + qi] + tb * pop->qEw[size_t(jb + 1) * NQ + qi];
+  double q1 = (1 - tb) * pop->qEw[size_t(jb) * NQ + qi + 1] + tb * pop->qEw[size_t(jb + 1) * NQ + qi + 1];
   double mr = (1 - tb) * pop->mrEw[jb] + tb * pop->mrEw[jb + 1];
-  double meanEw = pop->meanCoef[D - 1] +
-                  pop->meanCoef[size_t(D) + D - 1] * x +
-                  pop->meanCoef[size_t(2) * D + D - 1] * x * x;
+  double meanEw =
+      pop->meanCoef[D - 1] + pop->meanCoef[size_t(D) + D - 1] * x + pop->meanCoef[size_t(2) * D + D - 1] * x * x;
   theta[D - 1] = meanEw + mr + (1 - qt) * q0 + qt * q1;
 }
 
-double HGCalTMMShower::density(const std::vector<double>& theta, int K,
-                               int layer, double cx, double cy) const {
+double HGCalTMMShower::density(const std::vector<double>& theta, int K, int layer, double cx, double cy) const {
   if (K <= 0 || theta.empty() || layer < 0 || layer >= kNLay)
     return 0.0;
   // softmax over the ln pi block for exact normalization
@@ -245,10 +232,8 @@ double HGCalTMMShower::density(const std::vector<double>& theta, int K,
     const double sr = std::exp(theta[4 * K + k]);
     const double sz = std::exp(theta[5 * K + k]);
     const double nu = std::exp(theta[6 * K + k]);
-    const double zm = phiCdf((zHi_[layer] - muz) / sz) -
-                      phiCdf((zLo_[layer] - muz) / sz);
-    const double d2 =
-        (cx - mux) * (cx - mux) + (cy - muy) * (cy - muy);
+    const double zm = phiCdf((zHi_[layer] - muz) / sz) - phiCdf((zLo_[layer] - muz) / sz);
+    const double d2 = (cx - mux) * (cx - mux) + (cy - muy) * (cy - muy);
     g += pi * zm * std::exp(tLogPdf(d2, sr * sr, nu));
   }
   return g;
@@ -261,8 +246,7 @@ double HGCalTMMShower::eSpot(double x, int layer) const {
   double t;
   bracket(calib_.xGrid, x, j, t);
   const int nl = kNLay;
-  return (1 - t) * calib_.eSpot[size_t(j) * nl + layer] +
-         t * calib_.eSpot[size_t(j + 1) * nl + layer];
+  return (1 - t) * calib_.eSpot[size_t(j) * nl + layer] + t * calib_.eSpot[size_t(j + 1) * nl + layer];
 }
 
 double HGCalTMMShower::ringCal(double x, int ring) const {
@@ -271,8 +255,7 @@ double HGCalTMMShower::ringCal(double x, int ring) const {
   int j;
   double t;
   bracket(calib_.xGrid, x, j, t);
-  return (1 - t) * calib_.ringCal[size_t(j) * nRing_ + ring] +
-         t * calib_.ringCal[size_t(j + 1) * nRing_ + ring];
+  return (1 - t) * calib_.ringCal[size_t(j) * nRing_ + ring] + t * calib_.ringCal[size_t(j + 1) * nRing_ + ring];
 }
 
 // ---------------------------------------------------------------------------
@@ -333,8 +316,7 @@ void HGCalTMMShower::computeSpots(double e0,
     for (int k = 0; k < K; ++k) {
       const double muz = th[3 * K + k];
       const double sz = std::exp(th[5 * K + k]);
-      const double zm = phiCdf((zHi_[l] - muz) / sz) -
-                        phiCdf((zLo_[l] - muz) / sz);
+      const double zm = phiCdf((zHi_[l] - muz) / sz) - phiCdf((zLo_[l] - muz) / sz);
       mass[size_t(l) * K + k] = pi[k] * zm;
       mL[l] += pi[k] * zm;
     }
@@ -386,9 +368,7 @@ void HGCalTMMShower::computeSpots(double e0,
     if (n <= 0)
       continue;
     const double zg = zsign * zLayers[l];
-    const double s = (std::abs(dir[2]) > 1e-6)
-                         ? (zg - entry[2]) / dir[2]
-                         : 0.0;
+    const double s = (std::abs(dir[2]) > 1e-6) ? (zg - entry[2]) / dir[2] : 0.0;
     const double px = entry[0] + dir[0] * s;
     const double py = entry[1] + dir[1] * s;
     for (long i = 0; i < n; ++i) {
@@ -415,8 +395,7 @@ void HGCalTMMShower::computeSpots(double e0,
       sp.y = py + uu * e1[1] + vv * e2[1];
       sp.z = zg;
       sp.energy = es;
-      const double dx = sp.x - entry[0], dy = sp.y - entry[1],
-                   dz = sp.z - entry[2];
+      const double dx = sp.x - entry[0], dy = sp.y - entry[1], dz = sp.z - entry[2];
       sp.t = std::sqrt(dx * dx + dy * dy + dz * dz) / 29.9792458;
       spots.push_back(sp);
       totRaw += es;

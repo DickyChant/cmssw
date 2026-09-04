@@ -22,10 +22,16 @@ int main(int argc, char** argv) {
   std::vector<int> kCount(20, 0);
   for (int i = 0; i < N; ++i) {
     model.drawDeck(x, flat, gauss, K, th);
-    if (K < 20) kCount[K]++;
-    if (kDom < 0) kDom = K;
-    if (K != kDom) continue;
-    if (s1.empty()) { s1.assign(th.size(), 0); s2.assign(th.size(), 0); }
+    if (K < 20)
+      kCount[K]++;
+    if (kDom < 0)
+      kDom = K;
+    if (K != kDom)
+      continue;
+    if (s1.empty()) {
+      s1.assign(th.size(), 0);
+      s2.assign(th.size(), 0);
+    }
     for (size_t d = 0; d < th.size(); ++d) {
       s1[d] += th[d];
       s2[d] += th[d] * th[d];
@@ -34,7 +40,8 @@ int main(int argc, char** argv) {
   }
   printf("K counts:");
   for (int k = 0; k < 20; ++k)
-    if (kCount[k]) printf(" K=%d:%d", k, kCount[k]);
+    if (kCount[k])
+      printf(" K=%d:%d", k, kCount[k]);
   printf("\nstats for K=%d (n=%d):\n", kDom, nAcc);
   for (size_t d = 0; d < s1.size(); ++d) {
     double m = s1[d] / nAcc;
@@ -47,7 +54,11 @@ int main(int argc, char** argv) {
   for (double cx = -15; cx <= 15; cx += 0.25)
     for (double cy = -15; cy <= 15; cy += 0.25)
       sum += model.density(th, K, 8, cx, cy) * 0.0625;
-  printf("density layer-8 integral (one deck): %.4f  eSpot(8)=%.2e "
-         "ring(3)=%.3f\n", sum, model.eSpot(x, 8), model.ringCal(x, 3));
+  printf(
+      "density layer-8 integral (one deck): %.4f  eSpot(8)=%.2e "
+      "ring(3)=%.3f\n",
+      sum,
+      model.eSpot(x, 8),
+      model.ringCal(x, 3));
   return 0;
 }
