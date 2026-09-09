@@ -1,0 +1,67 @@
+diff --git a/shower-code/CMakeLists.txt b/shower-code/CMakeLists.txt
+index f3deba5..bfdc54a 100644
+--- a/shower-code/CMakeLists.txt
++++ b/shower-code/CMakeLists.txt
+@@ -403,7 +403,7 @@ export(
+ # Create a version file
+ write_basic_package_version_file(
+     "${CMAKE_CURRENT_BINARY_DIR}/PanScalesConfigVersion.cmake"
+-    VERSION "1.0.0"
++    VERSION "${PROJECT_VERSION}"
+     COMPATIBILITY SameMajorVersion
+ )
+ 
+@@ -420,4 +420,22 @@ install(
+         "${CMAKE_CURRENT_BINARY_DIR}/PanScalesConfig.cmake"
+         "${CMAKE_CURRENT_BINARY_DIR}/PanScalesConfigVersion.cmake"
+     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/PanScales
+-)
+\ No newline at end of file
++)
++
++# Export usable headers as well as the library. Several public headers are
++# symlinks into pinned submodules: COPYONLY dereferences them so an installed
++# SDK does not depend on the original source checkout.
++foreach(header_root "${CMAKE_CURRENT_SOURCE_DIR}/../submodules/AnalysisTools"
++                    "${CMAKE_CURRENT_SOURCE_DIR}")
++  file(GLOB_RECURSE public_headers RELATIVE "${header_root}"
++       "${header_root}/*.h" "${header_root}/*.hh")
++  foreach(header IN LISTS public_headers)
++    configure_file("${header_root}/${header}"
++                   "${CMAKE_CURRENT_BINARY_DIR}/install-headers/${header}" COPYONLY)
++  endforeach()
++endforeach()
++install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/install-headers/"
++        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
++install(FILES "${CMAKE_CURRENT_BINARY_DIR}/config.hh" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
++install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE"
++        DESTINATION ${CMAKE_INSTALL_DATADIR}/PanScales)
+diff --git a/shower-code/panhoppet/CMakeLists.txt b/shower-code/panhoppet/CMakeLists.txt
+index e37b324..51cf10a 100644
+--- a/shower-code/panhoppet/CMakeLists.txt
++++ b/shower-code/panhoppet/CMakeLists.txt
+@@ -21,7 +21,7 @@ set(HOPPET_ENABLE_N3LO_FORTRAN_MTM OFF CACHE BOOL "" FORCE)
+ set(HOPPET_DYNLIB_NAME "hoppet4panscales" CACHE STRING "" FORCE)
+ 
+ # add in the project that is in the ../hoppet directory
+-add_subdirectory(${HOPPET_DIR} hoppet4panscales_build)
++add_subdirectory(${HOPPET_DIR} hoppet4panscales_build EXCLUDE_FROM_ALL)
+ 
+ add_library(panhoppet OBJECT panhoppet_interface.f90 panhoppet_slice.f90 panhoppet_v1.cc)
+ target_include_directories(panhoppet PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+@@ -41,4 +41,13 @@ install(
+     EXPORT PanScalesTargets
+     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+-)
+\ No newline at end of file
++)
++
++# Install only the shared-library SDK needed by PanScales, not HOPPET's
++# standalone static library, examples or configuration tools.
++file(GLOB hoppet_headers "${HOPPET_DIR}/src/*.h")
++file(GLOB hoppet_detail_headers "${HOPPET_DIR}/src/hoppet/*.h")
++install(FILES ${hoppet_headers} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
++install(FILES ${hoppet_detail_headers} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/hoppet)
++install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/hoppet4panscales_build/include/hoppet/"
++        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/hoppet)

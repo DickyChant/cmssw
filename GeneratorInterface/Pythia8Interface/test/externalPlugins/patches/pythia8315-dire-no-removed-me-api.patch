@@ -1,0 +1,30 @@
+diff --git a/src/DireWeightContainer.cc b/src/DireWeightContainer.cc
+index 2b79e19..6f4c5d9 100644
+--- a/src/DireWeightContainer.cc
++++ b/src/DireWeightContainer.cc
+@@ -10,6 +10,7 @@
+ #include "Pythia8/DireSpace.h"
+ #include "Pythia8/DireTimes.h"
+ #include "Pythia8/Plugins.h"
++#include <stdexcept>
+ 
+ namespace Pythia8 {
+ 
+@@ -29,6 +30,9 @@ void DireWeightContainer::setup() {
+   card            = settingsPtr->word("Dire:MG5card");
+   string mePlugin = settingsPtr->word("Dire:MEplugin");
+   if (mePlugin.size() > 0) {
++#if PYTHIA_VERSION_INTEGER >= 8316
++    throw std::runtime_error("Extracted Dire: ExternalMEs::initDire was removed; ME plugins require a separate port");
++#else
+     if (!hasMEs) {
+       matrixElements = make_plugin<ExternalMEs>(
+         "libpythia8mg5" + mePlugin + ".so", "ExternalMEsMadgraph",
+@@ -36,6 +40,7 @@ void DireWeightContainer::setup() {
+     }
+     hasMEs = matrixElements != nullptr ?
+       matrixElements->initDire(infoPtr, card) : false;
++#endif
+   }
+ 
+   // Initialize additional user-defined enhancements of splitting kernel
