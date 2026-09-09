@@ -1,4 +1,7 @@
 <use name="rootcling"/>
+<use name="FWCore/Utilities"/>
+<use name="fastjet"/>
+<use name="fastjet-contrib"/>
 <use name="DataFormats/Common"/>
 <use name="DataFormats/HepMCCandidate"/>
 <use name="DataFormats/JetReco"/>

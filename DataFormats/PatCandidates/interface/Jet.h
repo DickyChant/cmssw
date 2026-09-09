@@ -121,6 +121,14 @@ namespace pat {
       int partonFlavour() const;
       /// return the hadron-based flavour of the jet
       int hadronFlavour() const;
+      const std::array<int, reco::kAlgoArrayLen>& algoFlav(const reco::FlavAlgo& algo) const;
+      const std::array<int, reco::kAlgoArrayLen>& algoFlav(const uint8_t& algoNum) const;
+      uint32_t algoFlavCode(const reco::FlavAlgo& algo) const;
+      uint32_t algoFlavCode(const uint8_t& algoNum) const;
+      int8_t algoFlavLeading(const reco::FlavAlgo& algo) const;
+      int8_t algoFlavLeading(const uint8_t& algoNum) const;
+      bool haveAlgoFlav(const reco::FlavAlgo& algo) const;
+      bool haveAlgoFlav(const uint8_t& algoNum) const;
       /// return the JetFlavourInfo of the jet
       const reco::JetFlavourInfo& jetFlavourInfo() const;
 
@@ -270,6 +278,12 @@ namespace pat {
       void setPartonFlavour(int partonFl);
       /// method to set the hadron-based flavour of the jet
       void setHadronFlavour(int hadronFl);
+      void setAlgoFlav(const reco::FlavAlgo& algo, const std::vector<int>& flav);
+      void setAlgoFlav(const reco::FlavAlgo& algo, const fastjet::contrib::FlavInfo& flav);
+      void setAlgoFlav(const reco::FlavAlgo& algo, const uint32_t& code);
+      void setAlgoFlav(const uint8_t& algoNum, const std::vector<int>& flav);
+      void setAlgoFlav(const uint8_t& algoNum, const fastjet::contrib::FlavInfo& flav);
+      void setAlgoFlav(const uint8_t& algoNum, const uint32_t& code);
       /// method to set the JetFlavourInfo of the jet
       void setJetFlavourInfo(const reco::JetFlavourInfo& jetFlavourInfo);
 
