@@ -4,6 +4,7 @@
 #include <memory>
 
 #include <cstdio>
+#include <charconv>
 #include <cstring>
 #include <fstream>
 #include <sstream>
@@ -217,8 +218,15 @@ namespace lhef {
           scales.push_back(scaleval);
         }
       } else if (name == "event_num") {
-        const char *evtnumstr = XMLSimpleStr(attributes.getValue(XMLString::transcode("num")));
-        sscanf(evtnumstr, "%d", &evtnum);
+        const XMLCh *value = attributes.getValue(XMLUniStr("num"));
+        if (!value)
+          throw cms::Exception("InvalidFormat") << "Missing num attribute in <event_num>.";
+        const XMLSimpleStr number(value);
+        const char *begin = number;
+        const char *end = begin + std::strlen(begin);
+        const auto result = std::from_chars(begin, end, evtnum);
+        if (result.ec != std::errc{} || result.ptr != end)
+          throw cms::Exception("InvalidFormat") << "Invalid integer num attribute in <event_num>.";
       }
       xmlEventNodes.push_back(elem);
       return;

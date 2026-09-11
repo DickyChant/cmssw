@@ -13,3 +13,10 @@
 </bin>
 
 <test name="test_cmsLHEtoEOSManager" command="test_cmsLHEtoEOSManager.sh"/>
+
+<bin file="testLHEH5Reader.cc" name="testLHEH5Reader">
+  <use name="GeneratorInterface/LHEInterface"/>
+  <use name="FWCore/Utilities"/>
+</bin>
+
+<test name="TestLHEH5Input" command="bash ${SCRAM_TEST_PATH}/testLHEH5Input.sh"/>

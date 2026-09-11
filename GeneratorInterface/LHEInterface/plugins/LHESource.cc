@@ -29,7 +29,7 @@
 
 #include "GeneratorInterface/LHEInterface/interface/LHERunInfo.h"
 #include "GeneratorInterface/LHEInterface/interface/LHEEvent.h"
-#include "GeneratorInterface/LHEInterface/interface/LHEReader.h"
+#include "GeneratorInterface/LHEInterface/interface/LHEInputReader.h"
 
 #include "LHEProvenanceHelper.h"
 
@@ -61,7 +61,7 @@ private:
   edm::InputFileCatalog inputFileCatalog_;
   size_t fileIndex_ = 0;
 
-  std::unique_ptr<lhef::LHEReader> reader_;
+  std::unique_ptr<lhef::LHEInputReader> reader_;
 
   std::shared_ptr<lhef::LHERunInfo> runInfoLast_;
   std::shared_ptr<lhef::LHEEvent> partonLevel_;
@@ -74,8 +74,11 @@ private:
 LHESource::LHESource(const edm::ParameterSet& params, const edm::InputSourceDescription& desc)
     : ProducerSourceBase(params, desc, false),
       inputFileCatalog_(params),
-      reader_(new LHEReader(inputFileCatalog_.allPFNsFromFirstCatalog(),
-                            params.getUntrackedParameter<unsigned int>("skipEvents", 0))),
+      reader_(makeLHEInputReader(params.getUntrackedParameter<std::string>("inputFormat", "xml"),
+                                 inputFileCatalog_.allPFNsFromFirstCatalog(),
+                                 params.getUntrackedParameter<unsigned int>("skipEvents", 0),
+                                 params.getUntrackedParameter<bool>("hdf5AllowUnsupportedMetadata", false),
+                                 params.getUntrackedParameter<unsigned int>("hdf5MaxParticlesPerEvent", 100000))),
       lheProvenanceHelper_(edm::TypeID(typeid(LHEEventProduct)),
                            edm::TypeID(typeid(LHERunInfoProduct)),
                            productRegistryUpdate(),
@@ -197,6 +200,7 @@ void LHESource::readEvent_(edm::EventPrincipal& eventPrincipal) {
   product->setScales(partonLevel_->scales());
   product->setNpLO(partonLevel_->npLO());
   product->setNpNLO(partonLevel_->npNLO());
+  product->setEvtNum(partonLevel_->evtnum());
   std::for_each(partonLevel_->getComments().begin(),
                 partonLevel_->getComments().end(),
                 std::bind(&LHEEventProduct::addComment, product.get(), std::placeholders::_1));
@@ -238,6 +242,11 @@ void LHESource::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
   edm::ProducerSourceBase::fillDescription(desc);
   edm::InputFileCatalog::fillDescription(desc);
   desc.addUntracked<unsigned int>("skipEvents", 0U)->setComment("Skip the first 'skipEvents' events.");
+  desc.addUntracked<std::string>("inputFormat", "xml")->setComment("Input encoding: xml or consolidated hdf5.");
+  desc.addUntracked<bool>("hdf5AllowUnsupportedMetadata", false)
+      ->setComment("Explicitly allow lossy core-event HDF5 input, reporting metadata not represented in LHE products.");
+  desc.addUntracked<unsigned int>("hdf5MaxParticlesPerEvent", 100000U)
+      ->setComment("Reject HDF5 events exceeding this particle bound before allocating the event payload.");
   descriptions.add("source", desc);
 }
 
