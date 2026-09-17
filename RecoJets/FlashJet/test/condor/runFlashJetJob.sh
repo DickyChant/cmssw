@@ -2,12 +2,12 @@
 # FlashJet GPU job.  Usage (from the submit files):
 #   runFlashJetJob.sh CLUSTER NAME validate
 #   runFlashJetJob.sh CLUSTER NAME bench WORKFLOW IMPL BACKEND NSOFT THREADS EVENTS [STREAMS]
-#   runFlashJetJob.sh CLUSTER NAME scan WORKFLOW NSOFT
+#   runFlashJetJob.sh CLUSTER NAME scan WORKFLOW SOURCE   (SOURCE: nSoft for synthetic events, miniaod, scouting)
 #       throughput on this node: FastJet (4 threads), alpaka serial (4 threads),
 #       alpaka CUDA at 1/4/8/16 streams
 #   runFlashJetJob.sh CLUSTER NAME sonic-validate
 #   runFlashJetJob.sh CLUSTER NAME sonic-bench NSOFT THREADS EVENTS [STREAMS]
-#   runFlashJetJob.sh CLUSTER NAME sonic-scan NSOFT
+#   runFlashJetJob.sh CLUSTER NAME sonic-scan SOURCE
 #       throughput on this node: FastJet (4 threads), SONIC GPU server at 1/4/16 streams
 # Outputs go to results/CLUSTER/NAME/ (transferred back to the EOS job directory).
 CLUSTER=$1 NAME=$2 TASK=$3
@@ -77,23 +77,43 @@ start_server() {  # start a GPU Triton server with the flashjet model in the bac
   return 1
 }
 
-bench() {  # bench RUN WORKFLOW IMPL BACKEND NSOFT THREADS EVENTS STREAMS [extra cmsRun args]
-  local name=$1 workflow=$2 impl=$3 backend=$4 nsoft=$5 threads=$6 events=$7 streams=$8
+bench() {  # bench RUN WORKFLOW IMPL BACKEND SOURCE THREADS EVENTS STREAMS [extra cmsRun args]
+  # SOURCE: a number (synthetic events with that many soft particles), miniaod or scouting
+  local name=$1 workflow=$2 impl=$3 backend=$4 source=$5 threads=$6 events=$7 streams=$8
   shift 8
+  local input
+  case $source in
+    miniaod) input=(--input miniaod --inputFiles file:$TOP/phase2_ttbar_pu200_miniaod.root) ;;
+    scouting) input=(--input scouting --inputFiles file:$TOP/scouting_run2026d.root) ;;
+    *) input=(--nSoft "$source") ;;
+  esac
   run "$name" cmsRun "$CFG/benchmarkFlashJet_cfg.py" --workflow "$workflow" --impl "$impl" --backend "$backend" \
-    --nSoft "$nsoft" --threads "$threads" --streams "$streams" --maxEvents "$events" --json "$OUT/$name.json" "$@"
+    "${input[@]}" --threads "$threads" --streams "$streams" --maxEvents "$events" --json "$OUT/$name.json" "$@"
 }
 
-# events per run: enough for a stable rate after the 10% warm-up, a few minutes each
-events_for() {  # events_for IMPL NSOFT STREAMS
-  local base
-  case $1 in
+# events per run: enough for a stable rate after the 10% warm-up, a few minutes at most
+events_for() {  # events_for IMPL SOURCE WORKFLOW STREAMS
+  local impl=$1 source=$2 workflow=$3 streams=$4 base scale available=1000000
+  case $impl in
     fastjet) base=4000 ;;
     serial_sync) base=1000 ;;
     *) base=1500 ;;
   esac
-  [ "$2" -gt 2500 ] && base=$((base / 4))
-  echo $((base * ($3 > 4 ? $3 / 4 : 1)))
+  case $source:$workflow in
+    miniaod:ak4)  # ~10k particles per event
+      case $impl in fastjet) scale=4 ;; serial_sync) scale=20 ;; *) scale=50 ;; esac ;;
+    miniaod:*) scale=1 ;;
+    scouting:*)   # ~300 particles per event
+      case $impl in fastjet|serial_sync) scale=-5 ;; *) scale=1 ;; esac ;;
+    *) [ "$source" -gt 2500 ] && scale=4 || scale=1 ;;
+  esac
+  case $source in miniaod) available=2000 ;; scouting) available=30000 ;; esac
+  local n
+  if [ "$scale" -lt 0 ]; then n=$((base * -scale)); else n=$((base / scale)); fi
+  [ "$streams" -gt 4 ] && n=$((n * streams / 4))
+  [ "$n" -lt $((8 * streams)) ] && n=$((8 * streams))
+  [ "$n" -gt "$available" ] && n=$available
+  echo $n
 }
 
 case $TASK in
@@ -110,11 +130,11 @@ case $TASK in
     bench "$NAME" "$1" "$2" "$3" "$4" "$5" "$6" "${7:-$5}"
     ;;
   scan)
-    WORKFLOW=$1 NSOFT=$2
-    bench fastjet_t4 "$WORKFLOW" fastjet serial_sync "$NSOFT" 4 "$(events_for fastjet "$NSOFT" 4)" 4
-    bench serial_t4 "$WORKFLOW" alpaka serial_sync "$NSOFT" 4 "$(events_for serial_sync "$NSOFT" 4)" 4
+    WORKFLOW=$1 SOURCE=$2
+    bench fastjet_t4 "$WORKFLOW" fastjet serial_sync "$SOURCE" 4 "$(events_for fastjet "$SOURCE" "$WORKFLOW" 4)" 4
+    bench serial_t4 "$WORKFLOW" alpaka serial_sync "$SOURCE" 4 "$(events_for serial_sync "$SOURCE" "$WORKFLOW" 4)" 4
     for s in 1 4 8 16; do
-      bench cuda_s$s "$WORKFLOW" alpaka cuda_async "$NSOFT" "$s" "$(events_for cuda_async "$NSOFT" "$s")" "$s"
+      bench cuda_s$s "$WORKFLOW" alpaka cuda_async "$SOURCE" "$s" "$(events_for cuda_async "$SOURCE" "$WORKFLOW" "$s")" "$s"
     done
     ;;
   sonic-validate)
@@ -130,12 +150,12 @@ case $TASK in
     grep "flashjet model" "$OUT/tritonserver.log"
     ;;
   sonic-scan)
-    NSOFT=$1
-    bench fastjet_t4 ak4 fastjet serial_sync "$NSOFT" 4 "$(events_for fastjet "$NSOFT" 4)" 4
+    SOURCE=$1
+    bench fastjet_t4 ak4 fastjet serial_sync "$SOURCE" 4 "$(events_for fastjet "$SOURCE" ak4 4)" 4
     start_server || exit 1
     for mode in Async PseudoAsync; do
       for s in 1 4 16; do
-        bench sonic_${mode}_s$s ak4 sonic sonic "$NSOFT" "$s" "$(events_for sonic "$NSOFT" "$s")" "$s" \
+        bench sonic_${mode}_s$s ak4 sonic sonic "$SOURCE" "$s" "$(events_for sonic "$SOURCE" ak4 "$s")" "$s" \
           --address 127.0.0.1 --port 8001 --noShm --mode $mode
       done
     done
@@ -149,6 +169,7 @@ esac
 
 [ -n "$SERVER_PID" ] && kill $SERVER_PID
 cd "$TOP"
-rm -rf "$CMSSW_VERSION" cmssw.tar.gz flashjet.tar.gz flashjet_pyenv.tar.gz pyenv flashjet models triton_cache gen.root
+rm -rf "$CMSSW_VERSION" cmssw.tar.gz flashjet.tar.gz flashjet_pyenv.tar.gz pyenv flashjet models triton_cache gen.root \
+  phase2_ttbar_pu200_miniaod.root scouting_run2026d.root
 echo "exit status $STATUS"
 exit $STATUS

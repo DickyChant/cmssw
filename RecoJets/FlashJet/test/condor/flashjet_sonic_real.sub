@@ -1,0 +1,24 @@
+# FlashJet SONIC on GPU: a Triton server with the FlashJet Triton kernels runs
+# inside the job.  Needs flashjet.tar.gz and flashjet_pyenv.tar.gz (makeSonicEnv.sh).
+#   module load lxbatch/eossubmit && condor_submit @EOSDIR@/flashjet_sonic.sub
+executable            = @EOSDIR@/runFlashJetJob.sh
+initialdir            = @EOSDIR@
+arguments             = $(ClusterId) $(name) $(task)
+transfer_input_files  = cmssw.tar.gz, job.env, flashjet.tar.gz, flashjet_pyenv.tar.gz, phase2_ttbar_pu200_miniaod.root, scouting_run2026d.root
+transfer_output_files = results
+log                   = logs/flashjet_sonic_real.$(ClusterId).log
+output                = logs/$(name).$(ClusterId).out
+error                 = logs/$(name).$(ClusterId).err
+
+request_gpus          = 1
+request_cpus          = 4
+request_memory        = 12 GB
+request_disk          = 20 GB
+MY.WantOS             = "el9"
++MaxRuntime           = 7200
+# CMSSW_20_1 uses CUDA 13, which needs compute capability >= 7.5: no V100/P100
+# (MIG slices do not publish GPUs_Capability, so match on the device name)
+requirements          = !regexp("V100|P100", TARGET.GPUs_DeviceName)
+# optionally pin a GPU model, e.g. && regexp("A100", TARGET.GPUs_DeviceName)
+
+queue name, task from @EOSDIR@/tasks_sonic_real.txt

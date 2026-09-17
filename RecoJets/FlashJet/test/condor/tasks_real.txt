@@ -1,0 +1,4 @@
+real_ak4_scouting, scan ak4 scouting
+real_softdrop_scouting, scan softdrop scouting
+real_ak4_miniaod, scan ak4 miniaod
+real_softdrop_miniaod, scan softdrop miniaod

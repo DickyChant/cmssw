@@ -37,7 +37,7 @@ fi
 
 cp "$HERE/runFlashJetJob.sh" "$EOSDIR/"
 chmod +x "$EOSDIR/runFlashJetJob.sh"
-for f in flashjet_gpu.sub flashjet_sonic.sub tasks_gpu.txt tasks_sonic.txt; do
+for f in flashjet_gpu.sub flashjet_sonic.sub flashjet_real.sub flashjet_sonic_real.sub tasks_gpu.txt tasks_sonic.txt tasks_real.txt tasks_sonic_real.txt; do
   sed "s#@EOSDIR@#$EOSDIR#g; s#@CMSSW_VERSION@#$(basename "$CMSSW_BASE")#g" "$HERE/$f" > "$EOSDIR/$f"
 done
 echo "CMSSW_VERSION=$(basename "$CMSSW_BASE")" > "$EOSDIR/job.env"

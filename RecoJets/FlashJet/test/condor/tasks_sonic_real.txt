@@ -1,0 +1,2 @@
+sonic_real_scouting, sonic-scan scouting
+sonic_real_miniaod, sonic-scan miniaod
