@@ -23,7 +23,13 @@ retry() {
 retry "$APPTAINER" exec -B "$WORK" "$IMAGE" \
   python3 -m pip install --no-cache-dir --target "$WORK/pyenv" --index-url "$INDEX" \
   --extra-index-url https://pypi.org/simple torch triton
-retry "$APPTAINER" exec -B "$WORK" --env PYTHONPATH="$WORK/pyenv" "$IMAGE" \
+# the image preloads torch_geometric and puts its own libtorch (Triton PyTorch
+# backend) on LD_LIBRARY_PATH, which clashes with the pip torch; the flashjet
+# model only needs the Python backend, so override both (an empty LD_PRELOAD
+# would be replaced by the image default, hence libc)
+LIBS=/usr/local/cuda/compat/lib:/usr/local/nvidia/lib:/usr/local/nvidia/lib64
+retry "$APPTAINER" exec -B "$WORK" --env PYTHONPATH="$WORK/pyenv" --env LD_LIBRARY_PATH="$LIBS" \
+  --env LD_PRELOAD=libc.so.6 "$IMAGE" \
   python3 -c "import torch, triton; print('torch', torch.__version__, 'cuda', torch.version.cuda, 'triton', triton.__version__)"
 tar -C "$WORK" -czf "$WORK/flashjet_pyenv.tar.gz" pyenv
 cp "$WORK/flashjet_pyenv.tar.gz" "$EOSDIR/"

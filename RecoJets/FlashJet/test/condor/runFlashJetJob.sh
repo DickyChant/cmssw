@@ -54,6 +54,7 @@ start_server() {  # start a GPU Triton server with the flashjet model in the bac
   # apptainer can time out on a cold cvmfs image: retry the start
   for attempt in 1 2 3; do
     "$apptainer" exec --nv -B "$TOP" -B /cvmfs \
+      --env LD_LIBRARY_PATH=/usr/local/cuda/compat/lib:/usr/local/nvidia/lib:/usr/local/nvidia/lib64 --env LD_PRELOAD=libc.so.6 \
       --env PYTHONPATH="$TOP/pyenv" --env TRITON_CACHE_DIR="$TOP/triton_cache" --env HOME="$TOP" \
       "$image" tritonserver --model-repository="$TOP/models" \
       --http-port=8000 --grpc-port=8001 --metrics-port=8002 --log-verbose=0 >> "$OUT/tritonserver.log" 2>&1 &
