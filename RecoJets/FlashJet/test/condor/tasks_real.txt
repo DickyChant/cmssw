@@ -1,4 +1,6 @@
+verify_scouting, verify scouting
+verify_miniaod, verify miniaod
 real_ak4_scouting, scan ak4 scouting
-real_softdrop_scouting, scan softdrop scouting
+real_softdropak4_scouting, scan softdrop-ak4 scouting
 real_ak4_miniaod, scan ak4 miniaod
-real_softdrop_miniaod, scan softdrop miniaod
+real_softdropak4_miniaod, scan softdrop-ak4 miniaod

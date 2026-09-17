@@ -26,9 +26,12 @@ parser.add_argument("--mode", default="Async", choices=["Async", "PseudoAsync", 
 parser.add_argument("--input", default="synthetic", choices=["synthetic", "miniaod", "scouting"])
 parser.add_argument("--inputFiles", default=[], nargs="+", type=str)
 parser.add_argument("--compare", default=False, action="store_true")
+parser.add_argument("--failOnMismatch", default=False, action="store_true")
 parser.add_argument("--nSoft", default=1500, type=int)
 parser.add_argument("--nJets", default=6, type=int)
 parser.add_argument("--nPerJet", default=80, type=int)
+parser.add_argument("--reclusterJets", default="ak8", choices=["ak8", "ak4"],
+                    help="softdrop workflow: which jets to recluster (ak4 gives many more entries per event)")
 parser.add_argument("--entriesPerThread", default=1, type=int)
 parser.add_argument("--json", default="benchmark.json", type=str)
 parser.add_argument("--warmup", default=-1, type=int,
@@ -104,7 +107,9 @@ else:
     particles = "particles"
 
 alpakaPSet = cms.untracked.PSet(backend=cms.untracked.string(options.backend))
-sdParams = dict(zcut=cms.double(0.1), beta=cms.double(0.0), R0=cms.double(0.8))
+jetR = 0.8 if options.reclusterJets == "ak8" else 0.4
+jetPtMin = 100.0 if options.reclusterJets == "ak8" else 20.0
+sdParams = dict(zcut=cms.double(0.1), beta=cms.double(0.0), R0=cms.double(jetR))
 
 from RecoJets.JetProducers.ak4GenJets_cfi import ak4GenJets as _fastjet
 
@@ -137,9 +142,9 @@ if options.workflow == "ak4":
         process.path += process.jets
 else:
     if options.input == "miniaod":
-        ak8 = "slimmedJetsAK8"
+        ak8 = "slimmedJetsAK8" if options.reclusterJets == "ak8" else "slimmedJetsPuppi"
     else:
-        process.ak8 = _fastjet.clone(src=particles, jetType="BasicJet", rParam=0.8, jetPtMin=100.0)
+        process.ak8 = _fastjet.clone(src=particles, jetType="BasicJet", rParam=jetR, jetPtMin=jetPtMin)
         process.path += process.ak8
         ak8 = "ak8"
     if options.impl == "fastjet" or options.compare:
@@ -158,12 +163,14 @@ else:
         process.path += process.clusters + process.softdrop
         if options.compare:
             process.compare = cms.EDAnalyzer("FlashJetValueMapCompareAnalyzer", jets=cms.InputTag(ak8),
-                                             reference=cms.string("fastjetSoftdrop"), test=cms.string("softdrop"))
+                                             reference=cms.string("fastjetSoftdrop"), test=cms.string("softdrop"),
+                                             failOnMismatch=cms.bool(options.failOnMismatch))
             process.path += process.compare
 
 if options.compare and options.workflow == "ak4":
     process.compare = cms.EDAnalyzer("FlashJetCompareAnalyzer", reference=cms.InputTag("fastjetJets"),
-                                     test=cms.InputTag("jets"), ptMin=cms.double(5.0), tolerance=cms.double(1e-9))
+                                     test=cms.InputTag("jets"), ptMin=cms.double(5.0), tolerance=cms.double(1e-9),
+                                     failOnMismatch=cms.bool(options.failOnMismatch))
     process.path += process.compare
 
 process = applyOptions(process, options)
@@ -175,6 +182,7 @@ with open(options.json.removesuffix(".json") + ".meta.json", "w") as _meta:
                     backend=options.backend if options.impl == "alpaka" else
                     (f"sonic-{options.mode}" if options.impl == "sonic" else options.impl),
                     nSoft=options.nSoft, nJets=options.nJets, nPerJet=options.nPerJet,
+                    reclusterJets=options.reclusterJets,
                     threads=process.options.numberOfThreads.value(),
                     streams=process.options.numberOfStreams.value() or process.options.numberOfThreads.value(),
                     events=options.maxEvents, warmup=warmup), _meta, indent=1)

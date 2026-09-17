@@ -69,7 +69,7 @@ def main():
     parser.add_argument("--markdown", action="store_true")
     args = parser.parse_args()
     runs = [load(p) for p in find_jsons(args.paths)]
-    key = lambda r: (r["meta"].get("workflow", ""), r["meta"].get("input", "synthetic"), r["meta"].get("nSoft", 0), r["device"], r["meta"].get("impl", ""),
+    key = lambda r: (r["meta"].get("workflow", "") + r["meta"].get("reclusterJets", ""), r["meta"].get("input", "synthetic"), r["meta"].get("nSoft", 0), r["device"], r["meta"].get("impl", ""),
                      r["meta"].get("backend", ""), r["meta"].get("streams", 0), r["name"])
     runs.sort(key=key)
 
@@ -81,7 +81,10 @@ def main():
         tp = f"{r['throughput'][2]:.1f} ± {r['throughput'][1]:.1f}" if r["throughput"] else "n/a"
         mods = sum(t for _, _, t, _ in r["modules"])
         inp = m.get("input", "synthetic")
-        rows.append([m.get("workflow", "?"), f"synthetic-{m.get('nSoft', '?')}" if inp == "synthetic" else inp, r["device"], m.get("impl", "?"), m.get("backend", "?"),
+        workflow = m.get("workflow", "?")
+        if workflow == "softdrop":
+            workflow += "-" + m.get("reclusterJets", "ak8")
+        rows.append([workflow, f"synthetic-{m.get('nSoft', '?')}" if inp == "synthetic" else inp, r["device"], m.get("impl", "?"), m.get("backend", "?"),
                      str(m.get("threads", "?")), str(m.get("streams", "?")), str(r["events"]), tp, f"{mods:.3f}",
                      r["name"]])
     if args.markdown:

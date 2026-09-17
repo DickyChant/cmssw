@@ -81,14 +81,19 @@ bench() {  # bench RUN WORKFLOW IMPL BACKEND SOURCE THREADS EVENTS STREAMS [extr
   # SOURCE: a number (synthetic events with that many soft particles), miniaod or scouting
   local name=$1 workflow=$2 impl=$3 backend=$4 source=$5 threads=$6 events=$7 streams=$8
   shift 8
-  local input
+  local input recluster=()
+  case $workflow in
+    softdrop-ak4) workflow=softdrop; recluster=(--reclusterJets ak4) ;;
+    softdrop-ak8) workflow=softdrop; recluster=(--reclusterJets ak8) ;;
+  esac
   case $source in
     miniaod) input=(--input miniaod --inputFiles file:$TOP/phase2_ttbar_pu200_miniaod.root) ;;
     scouting) input=(--input scouting --inputFiles file:$TOP/scouting_run2026d.root) ;;
     *) input=(--nSoft "$source") ;;
   esac
   run "$name" cmsRun "$CFG/benchmarkFlashJet_cfg.py" --workflow "$workflow" --impl "$impl" --backend "$backend" \
-    "${input[@]}" --threads "$threads" --streams "$streams" --maxEvents "$events" --json "$OUT/$name.json" "$@"
+    "${input[@]}" "${recluster[@]}" --threads "$threads" --streams "$streams" --maxEvents "$events" \
+    --json "$OUT/$name.json" "$@"
 }
 
 # events per run: enough for a stable rate after the 10% warm-up, a few minutes at most
@@ -136,6 +141,18 @@ case $TASK in
     bench serial_t4 "$WORKFLOW" alpaka serial_sync "$SOURCE" 4 "$(events_for serial_sync "$SOURCE" "$WORKFLOW" 4)" 4
     for s in 1 4 8 16; do
       bench cuda_s$s "$WORKFLOW" alpaka cuda_async "$SOURCE" "$s" "$(events_for cuda_async "$SOURCE" "$WORKFLOW" "$s")" "$s"
+    done
+    ;;
+  verify)
+    # the CUDA kernel clusters one entry per block: check it against FastJet on real events
+    SOURCE=$1
+    for wf in ak4 softdrop-ak8 softdrop-ak4; do
+      if [ "$wf" = ak4 ]; then
+        [ "$SOURCE" = miniaod ] && VEVENTS=20 || VEVENTS=200
+      else
+        VEVENTS=2000
+      fi
+      bench verify_${wf} "$wf" alpaka cuda_async "$SOURCE" 4 "$VEVENTS" 4 --compare --failOnMismatch
     done
     ;;
   sonic-validate)

@@ -21,6 +21,7 @@ public:
   explicit FlashJetValueMapCompareAnalyzer(edm::ParameterSet const& config)
       : jetsToken_{consumes(config.getParameter<edm::InputTag>("jets"))},
         tolerance_{config.getParameter<double>("tolerance")},
+        absoluteTolerance_{config.getParameter<double>("absoluteTolerance")},
         failOnMismatch_{config.getParameter<bool>("failOnMismatch")} {
     const auto reference = config.getParameter<std::string>("reference");
     const auto test = config.getParameter<std::string>("test");
@@ -41,7 +42,7 @@ public:
         const float a = ref[jet];
         const float b = test[jet];
         ++values_;
-        if (std::abs(a - b) > tolerance_ * std::max(1.f, std::abs(a))) {
+        if (std::abs(a - b) > tolerance_ * std::max(1.f, std::abs(a)) + absoluteTolerance_) {
           ++mismatches_;
           edm::LogWarning("FlashJetCompare")
               << "event " << event.id() << " jet " << j << " " << names_[k] << ": reference " << a << ", test " << b;
@@ -63,6 +64,10 @@ public:
     desc.add<std::string>("test", "flashJetSoftDrop");
     desc.add<std::vector<std::string>>("names", {"mass", "pt", "zg", "rg", "nDropped"});
     desc.add<double>("tolerance", 1e-5)->setComment("relative, values are stored as float");
+    desc.add<double>("absoluteTolerance", 1e-4)
+        ->setComment(
+            "added to the tolerance: a groomed jet that is a single particle has a numerically zero mass "
+            "whose sign follows the rounding");
     desc.add<bool>("failOnMismatch", false);
     descriptions.addWithDefaultLabel(desc);
   }
@@ -70,6 +75,7 @@ public:
 private:
   const edm::EDGetTokenT<edm::View<reco::Jet>> jetsToken_;
   const double tolerance_;
+  const double absoluteTolerance_;
   const bool failOnMismatch_;
   std::vector<std::string> names_;
   std::vector<edm::EDGetTokenT<edm::ValueMap<float>>> refTokens_, testTokens_;
