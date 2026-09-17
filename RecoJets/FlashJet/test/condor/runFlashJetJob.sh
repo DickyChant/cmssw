@@ -133,9 +133,11 @@ case $TASK in
     NSOFT=$1
     bench fastjet_t4 ak4 fastjet serial_sync "$NSOFT" 4 "$(events_for fastjet "$NSOFT" 4)" 4
     start_server || exit 1
-    for s in 1 4 16; do
-      bench sonic_s$s ak4 sonic sonic "$NSOFT" "$s" "$(events_for sonic "$NSOFT" "$s")" "$s" \
-        --address 127.0.0.1 --port 8001 --noShm
+    for mode in Async PseudoAsync; do
+      for s in 1 4 16; do
+        bench sonic_${mode}_s$s ak4 sonic sonic "$NSOFT" "$s" "$(events_for sonic "$NSOFT" "$s")" "$s" \
+          --address 127.0.0.1 --port 8001 --noShm --mode $mode
+      done
     done
     grep "flashjet model" "$OUT/tritonserver.log"
     ;;

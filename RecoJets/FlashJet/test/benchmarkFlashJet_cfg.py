@@ -123,7 +123,8 @@ process = applyOptions(process, options)
 import json as _json
 with open(options.json.removesuffix(".json") + ".meta.json", "w") as _meta:
     _json.dump(dict(workflow=options.workflow, impl=options.impl,
-                    backend=options.backend if options.impl == "alpaka" else options.impl,
+                    backend=options.backend if options.impl == "alpaka" else
+                    (f"sonic-{options.mode}" if options.impl == "sonic" else options.impl),
                     nSoft=options.nSoft, nJets=options.nJets, nPerJet=options.nPerJet,
                     threads=process.options.numberOfThreads.value(),
                     streams=process.options.numberOfStreams.value() or process.options.numberOfThreads.value(),

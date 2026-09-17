@@ -18,6 +18,7 @@ import re
 SKIP_TYPES = {"idle", "EmptySource", "TriggerResultInserter", "PathStatusInserter", "cleanup", "other", "eventsetup",
               "FlashJetRandomCandidateProducer"}
 SKIP_LABELS = {"ak8", "source"}
+DEVICE = re.compile(r"\|\s+\d+\s+((?:NVIDIA|Tesla)[^|]*?)\s{2,}")
 THROUGHPUT = re.compile(r"Average throughput: ([\d.]+) ± ([\d.]+) ev/s \(robust estimate with 5% outlier rejection: ([\d.]+) ev/s\)")
 
 
@@ -47,10 +48,16 @@ def load(path):
             if m:
                 tp = (float(m.group(1)), float(m.group(2)), float(m.group(3)))
                 break
+    device = "cpu-only"
+    smi = os.path.join(os.path.dirname(path), "nvidia-smi.txt")
+    if os.path.exists(smi):
+        with open(smi, errors="replace") as f:
+            m = DEVICE.search(f.read())
+        device = m.group(1).strip() if m else "?"
     modules = [(m["label"], m["type"], m["time_real"] / m["events"], m["time_thread"] / m["events"])
                for m in data["modules"]
                if m["type"] not in SKIP_TYPES and m["label"] not in SKIP_LABELS and m["events"] > 0]
-    return dict(name=os.path.basename(base), meta=meta, throughput=tp, modules=modules,
+    return dict(name=os.path.basename(base), device=device, meta=meta, throughput=tp, modules=modules,
                 events=data["total"]["events"])
 
 
@@ -60,18 +67,18 @@ def main():
     parser.add_argument("--markdown", action="store_true")
     args = parser.parse_args()
     runs = [load(p) for p in find_jsons(args.paths)]
-    key = lambda r: (r["meta"].get("workflow", ""), r["meta"].get("nSoft", 0), r["meta"].get("impl", ""),
+    key = lambda r: (r["meta"].get("workflow", ""), r["meta"].get("nSoft", 0), r["device"], r["meta"].get("impl", ""),
                      r["meta"].get("backend", ""), r["meta"].get("streams", 0), r["name"])
     runs.sort(key=key)
 
-    header = ["workflow", "nSoft", "impl", "backend", "threads", "streams", "events", "throughput [ev/s]",
+    header = ["workflow", "nSoft", "device", "impl", "backend", "threads", "streams", "events", "throughput [ev/s]",
               "measured modules [ms/ev]", "run"]
     rows = []
     for r in runs:
         m = r["meta"]
         tp = f"{r['throughput'][2]:.1f} ± {r['throughput'][1]:.1f}" if r["throughput"] else "n/a"
         mods = sum(t for _, _, t, _ in r["modules"])
-        rows.append([m.get("workflow", "?"), str(m.get("nSoft", "?")), m.get("impl", "?"), m.get("backend", "?"),
+        rows.append([m.get("workflow", "?"), str(m.get("nSoft", "?")), r["device"], m.get("impl", "?"), m.get("backend", "?"),
                      str(m.get("threads", "?")), str(m.get("streams", "?")), str(r["events"]), tp, f"{mods:.3f}",
                      r["name"]])
     if args.markdown:

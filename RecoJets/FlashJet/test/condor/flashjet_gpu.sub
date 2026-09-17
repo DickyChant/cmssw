@@ -14,7 +14,9 @@ request_cpus          = 4
 request_memory        = 8 GB
 MY.WantOS             = "el9"
 +MaxRuntime           = 7200
-# optionally pin a GPU model, e.g.
-# requirements        = regexp("A100", TARGET.GPUs_DeviceName)
+# CMSSW_20_1 uses CUDA 13, which needs compute capability >= 7.5: no V100/P100
+# (MIG slices do not publish GPUs_Capability, so match on the device name)
+requirements          = !regexp("V100|P100", TARGET.GPUs_DeviceName)
+# optionally pin a GPU model, e.g. && regexp("A100", TARGET.GPUs_DeviceName)
 
 queue name, task from @EOSDIR@/tasks_gpu.txt
