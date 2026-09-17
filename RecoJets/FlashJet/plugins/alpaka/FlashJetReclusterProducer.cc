@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -36,12 +37,14 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
       auto const& jets = event.get(srcToken_);
       std::vector<int32_t> selected;
       int32_t nParticles = 0;
+      int32_t maxEntry = 0;
       for (size_t j = 0; j < jets.size(); ++j) {
         auto const& jet = jets[j];
         if (jet.pt() < jetPtMin_ || jet.numberOfDaughters() == 0)
           continue;
         selected.push_back(j);
         nParticles += jet.numberOfDaughters();
+        maxEntry = std::max(maxEntry, static_cast<int32_t>(jet.numberOfDaughters()));
       }
       const int32_t nEntries = selected.size();
 
@@ -68,7 +71,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
       flashjet::FlashJetDeviceCollection device{event.queue(), nParticles, nEntries};
       alpaka::memcpy(event.queue(), device.buffer(), host.const_buffer());
-      algo_.cluster(event.queue(), device);
+      algo_.cluster(event.queue(), device, maxEntry);
       event.emplace(putToken_, std::move(device));
     }
 

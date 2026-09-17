@@ -53,7 +53,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
       flashjet::FlashJetDeviceCollection device{event.queue(), n, 1};
       alpaka::memcpy(event.queue(), device.buffer(), host.const_buffer());
-      algo_.cluster(event.queue(), device);
+      algo_.cluster(event.queue(), device, n);
       event.emplace(putToken_, std::move(device));
     }
 

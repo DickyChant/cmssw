@@ -24,10 +24,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
     static void fillPSetDescription(edm::ParameterSetDescription& desc, std::string const& algorithm, double rParam);
 
-    // clusters every entry of `collection` in place, in one kernel call: the
-    // entries are independent, and each one is processed by its own device
-    // thread
-    void cluster(Queue& queue, flashjet::FlashJetDeviceCollection& collection) const;
+    // Clusters every entry of `collection` in place, in one kernel call.  On
+    // CPU backends one work item handles one entry; on GPU backends one block
+    // does, and `maxEntrySize` (the largest entry, known to the caller that
+    // filled the collection) sizes that block.
+    void cluster(Queue& queue, flashjet::FlashJetDeviceCollection& collection, int32_t maxEntrySize = 0) const;
 
   private:
     const double R_;

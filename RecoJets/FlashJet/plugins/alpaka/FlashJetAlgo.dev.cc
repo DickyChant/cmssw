@@ -114,8 +114,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         using namespace ::flashjet::detail;
 
         // block-wide reduction buffers and the state the threads share
-        auto& redDist = alpaka::declareSharedVar<double[kBlockThreads], __COUNTER__>(acc);
-        auto& redIdx = alpaka::declareSharedVar<int32_t[kBlockThreads], __COUNTER__>(acc);
+        constexpr uint32_t kMaxWarps = kBlockThreads / 32;
+        auto& redDist = alpaka::declareSharedVar<double[kMaxWarps], __COUNTER__>(acc);
+        auto& redIdx = alpaka::declareSharedVar<int32_t[kMaxWarps], __COUNTER__>(acc);
+        auto& selDist = alpaka::declareSharedVar<double, __COUNTER__>(acc);
+        auto& selIdx = alpaka::declareSharedVar<int32_t, __COUNTER__>(acc);
         auto& iSel = alpaka::declareSharedVar<int32_t, __COUNTER__>(acc);
         auto& jSel = alpaka::declareSharedVar<int32_t, __COUNTER__>(acc);
         auto& isPair = alpaka::declareSharedVar<int32_t, __COUNTER__>(acc);
@@ -126,6 +129,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         const uint32_t tid = alpaka::getIdx<alpaka::Block, alpaka::Threads>(acc)[0u];
         const uint32_t threads = alpaka::getWorkDiv<alpaka::Block, alpaka::Threads>(acc)[0u];
         const uint32_t blocks = alpaka::getWorkDiv<alpaka::Grid, alpaka::Blocks>(acc)[0u];
+        const uint32_t warpSize = alpaka::warp::getSize(acc);
+        const uint32_t warp = tid / warpSize;
+        const uint32_t lane = tid % warpSize;
+        const uint32_t nWarps = (threads + warpSize - 1) / warpSize;
 
         for (int32_t b = alpaka::getIdx<alpaka::Grid, alpaka::Blocks>(acc)[0u]; b < nEntries; b += blocks) {
           const int32_t off = entries.offset()[b];
@@ -179,23 +186,38 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             s.cand[k] = candidate(k, bj, best);
           };
 
-          // block reduction of (distance, slot), ties to the lowest slot
+          // Reduction of (distance, slot) over the block, ties to the lowest
+          // slot.  The per-warp part uses shuffles, so the whole reduction
+          // costs two block synchronisations instead of one per tree level --
+          // with a merge step per particle, that overhead was dominating.
+          auto better = [](double a, int32_t ai, double b, int32_t bi) {
+            return bi >= 0 && (ai < 0 || b < a || (b == a && bi < ai));
+          };
           auto reduceMin = [&](double value, int32_t index) {
-            redDist[tid] = value;
-            redIdx[tid] = index;
+            for (uint32_t offset = warpSize / 2; offset > 0; offset /= 2) {
+              const double otherValue = alpaka::warp::shfl_down(acc, value, offset);
+              const int32_t otherIndex = alpaka::warp::shfl_down(acc, index, offset);
+              if (better(value, index, otherValue, otherIndex)) {
+                value = otherValue;
+                index = otherIndex;
+              }
+            }
+            if (lane == 0) {
+              redDist[warp] = value;
+              redIdx[warp] = index;
+            }
             alpaka::syncBlockThreads(acc);
-            for (uint32_t half = threads / 2; half > 0; half /= 2) {
-              if (tid < half) {
-                const double other = redDist[tid + half];
-                const int32_t otherIdx = redIdx[tid + half];
-                if (otherIdx >= 0 &&
-                    (redIdx[tid] < 0 || other < redDist[tid] || (other == redDist[tid] && otherIdx < redIdx[tid]))) {
-                  redDist[tid] = other;
-                  redIdx[tid] = otherIdx;
+            if (tid == 0) {
+              for (uint32_t w = 1; w < nWarps; ++w) {
+                if (better(redDist[0], redIdx[0], redDist[w], redIdx[w])) {
+                  redDist[0] = redDist[w];
+                  redIdx[0] = redIdx[w];
                 }
               }
-              alpaka::syncBlockThreads(acc);
+              selDist = redDist[0];
+              selIdx = redIdx[0];
             }
+            alpaka::syncBlockThreads(acc);
           };
 
           for (int32_t k = tid; k < n; k += threads) {
@@ -234,7 +256,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
             // the merge itself: bookkeeping on a single thread
             if (tid == 0) {
-              const int32_t i = redIdx[0];
+              const int32_t i = selIdx;
               iSel = i;
               isPair = 0;
               jSel = i;
@@ -304,10 +326,13 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                 s.cand[k] = candidate(k, i, d);
               }
             }
-            reduceMin(bestD, bestJ);
+            // the merged pseudojet needs a new nearest neighbour; a beam merge
+            // removed its slot, so there is nothing to reduce
+            if (pair)
+              reduceMin(bestD, bestJ);
             if (tid == 0 && pair) {
-              const int32_t bj = redIdx[0];
-              const double best = (bj >= 0) ? redDist[0] : kInf;
+              const int32_t bj = selIdx;
+              const double best = (bj >= 0) ? selDist : kInf;
               s.nnd[i] = best;
               s.nni[i] = bj;
               s.cand[i] = candidate(i, bj, best);
@@ -365,7 +390,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
   }  // namespace
 
-  void FlashJetAlgo::cluster(Queue& queue, flashjet::FlashJetDeviceCollection& collection) const {
+  void FlashJetAlgo::cluster(Queue& queue, flashjet::FlashJetDeviceCollection& collection, int32_t maxEntrySize) const {
     const int32_t nParticles = collection.view().particles().metadata().size();
     const int32_t nEntries = collection.view().entries().metadata().size();
     if (nParticles == 0 || nEntries == 0)
@@ -386,8 +411,12 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                           fscratch.data(),
                           iscratch.data());
     } else {
-      // one block per entry, up to the number of entries
-      auto workDiv = make_workdiv<Acc1D>(nEntries, kBlockThreads);
+      // one block per entry; no more threads than the largest entry has particles
+      uint32_t threads = kBlockThreads;
+      if (maxEntrySize > 0)
+        while (threads > 32 && threads / 2 >= static_cast<uint32_t>(maxEntrySize))
+          threads /= 2;
+      auto workDiv = make_workdiv<Acc1D>(nEntries, threads);
       alpaka::exec<Acc1D>(queue,
                           workDiv,
                           FlashJetBlockKernel{},
