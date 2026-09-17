@@ -1,0 +1,41 @@
+name: "flashjet"
+backend: "python"
+max_batch_size: 64
+input [
+  {
+    name: "p4"
+    data_type: TYPE_FP64
+    dims: [ -1, 4 ]
+    allow_ragged_batch: true
+  },
+  {
+    name: "algo"
+    data_type: TYPE_FP64
+    dims: [ 2 ]
+  }
+]
+output [
+  {
+    name: "jet_idx"
+    data_type: TYPE_INT32
+    dims: [ -1 ]
+  },
+  {
+    name: "n_jets"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+  }
+]
+dynamic_batching {
+  max_queue_delay_microseconds: 500
+}
+instance_group [
+  {
+    count: 1
+    kind: KIND_CPU
+  }
+]
+parameters: {
+  key: "backend"
+  value: { string_value: "auto" }
+}

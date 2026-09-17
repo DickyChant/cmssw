@@ -1,0 +1,10 @@
+<bin name="testFlashJetCore" file="testFlashJetCore.cc">
+  <use name="catch2"/>
+  <use name="fastjet"/>
+  <use name="RecoJets/FlashJet"/>
+</bin>
+
+<test name="testFlashJetModulesSerial" command="testFlashJetModules.sh serial_sync"/>
+<test name="testFlashJetModulesCUDA" command="testFlashJetModules.sh cuda_async">
+  <use name="cuda"/>
+</test>
