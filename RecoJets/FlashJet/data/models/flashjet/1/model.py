@@ -130,7 +130,17 @@ class TritonPythonModel:
             mask[b, : len(x)] = True
         return batch, mask
 
+    # flashjet.cluster() falls back to the O(N^3) torch backend above the
+    # large-kernel limit, which would take the whole padded batch with it
+    MAX_PARTICLES = 16384
+
     def _cluster(self, p4s, R, p):
+        widest = max((len(x) for x in p4s), default=0)
+        if widest > self.MAX_PARTICLES:
+            raise ValueError(
+                f"event with {widest} particles exceeds the {self.MAX_PARTICLES} the GPU kernels support; "
+                "cluster it on the CPU instead"
+            )
         if self.backend == "gpu":
             import flashjet
             import torch

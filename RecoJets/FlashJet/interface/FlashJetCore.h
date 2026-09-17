@@ -17,7 +17,15 @@
 //     or j are rescanned, so the cost is O(n^2) per event.
 //
 // Ties follow the FlashJet kernel: every argmin keeps the FIRST minimum
-// (lowest slot index), and pair-vs-beam ties go to the beam.
+// (lowest slot index), and pair-vs-beam ties go to the beam.  An incremental
+// update keeps the neighbour it has when a new distance ties it exactly, as
+// FlashJet and FastJet both do; only a full rescan applies the lowest-index
+// rule among equals.
+//
+// A pair is only a candidate below R: FastJet records no nearest neighbour at
+// dist == R^2 (ClusterSequence.hh), so a pair exactly at dR = R is left to the
+// beam.  Upstream FlashJet merges it instead when the softer particle has the
+// lower slot index; this port follows FastJet.
 
 #include <cmath>
 #include <cstdint>
@@ -154,6 +162,7 @@ namespace flashjet {
     if (n <= 0)
       return 0;
     const double invR2 = 1. / (R * R);
+    const double R2 = R * R;
 
     for (int32_t k = 0; k < n; ++k) {
       s.px[k] = inPx[k];
@@ -169,7 +178,8 @@ namespace flashjet {
 
     auto candidate = [&](int32_t k, int32_t nn, double d) -> double {
       const double wk = s.w[k];
-      const double wn = (nn >= 0) ? s.w[nn] : kInf;
+      // a neighbour at or beyond R is no neighbour: only the beam is left
+      const double wn = (nn >= 0 && d < R2) ? s.w[nn] : kInf;
       const double pair = ((wk < wn) ? wk : wn) * d * invR2;
       return (pair < wk) ? pair : wk;
     };
@@ -210,7 +220,7 @@ namespace flashjet {
 
       const double wi = s.w[i];
       const int32_t j = s.nni[i];
-      const double dpair = (j >= 0) ? ((wi < s.w[j]) ? wi : s.w[j]) * s.nnd[i] * invR2 : kInf;
+      const double dpair = (j >= 0 && s.nnd[i] < R2) ? ((wi < s.w[j]) ? wi : s.w[j]) * s.nnd[i] * invR2 : kInf;
       int32_t nStale = 0;
 
       if (dpair < wi) {

@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -9,6 +10,7 @@
 #include "DataFormats/JetReco/interface/Jet.h"
 #include "FWCore/ParameterSet/interface/ConfigurationDescriptions.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
+#include "FWCore/MessageLogger/interface/MessageLogger.h"
 #include "FWCore/ParameterSet/interface/ParameterSetDescription.h"
 #include "FWCore/Utilities/interface/InputTag.h"
 #include "HeterogeneousCore/AlpakaCore/interface/alpaka/EDPutToken.h"
@@ -42,6 +44,18 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         auto const& jet = jets[j];
         if (jet.pt() < jetPtMin_ || jet.numberOfDaughters() == 0)
           continue;
+        // the clustering derives a (rapidity, phi) grid from these: a
+        // non-finite constituent would poison it
+        bool finite = true;
+        for (size_t k = 0; k < jet.numberOfDaughters() && finite; ++k) {
+          auto const* c = jet.daughter(k);
+          finite =
+              std::isfinite(c->px()) && std::isfinite(c->py()) && std::isfinite(c->pz()) && std::isfinite(c->energy());
+        }
+        if (!finite) {
+          edm::LogWarning("FlashJet") << "jet " << j << " has non-finite constituents; not reclustered";
+          continue;
+        }
         selected.push_back(j);
         nParticles += jet.numberOfDaughters();
         maxEntry = std::max(maxEntry, static_cast<int32_t>(jet.numberOfDaughters()));

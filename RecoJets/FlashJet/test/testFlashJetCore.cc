@@ -276,3 +276,29 @@ TEST_CASE("FlashJet soft drop matches fastjet::contrib::SoftDrop", "[FlashJet]")
     }
   }
 }
+
+// FastJet records no nearest neighbour at exactly dist == R^2, so a pair at
+// dR = R goes to the beam.  Upstream FlashJet merges it when the softer
+// particle has the lower slot index; this port follows FastJet.
+TEST_CASE("FlashJet leaves a pair at exactly dR = R to the beam", "[FlashJet]") {
+  const double R = 0.4;
+  for (double p : {-1., 0., 1.}) {
+    for (bool softFirst : {false, true}) {
+      DYNAMIC_SECTION("p=" << p << " softFirst=" << softFirst) {
+        const double pt0 = softFirst ? 10. : 100., pt1 = softFirst ? 100. : 10.;
+        Particles in;
+        in.px = {pt0, pt1 * std::cos(R)};
+        in.py = {0., pt1 * std::sin(R)};
+        in.pz = {0., 0.};
+        in.e = {pt0, pt1};
+        // the two really are exactly R apart in the clustering's own measure
+        REQUIRE(std::atan2(in.py[1], in.px[1]) * std::atan2(in.py[1], in.px[1]) == R * R);
+        const auto flash = runFlashJet(in, R, p);
+        const auto fast = runFastJet(in, R, p);
+        REQUIRE(flash.size() == 2);
+        REQUIRE(flash.size() == fast.size());
+        REQUIRE(flash == fast);
+      }
+    }
+  }
+}

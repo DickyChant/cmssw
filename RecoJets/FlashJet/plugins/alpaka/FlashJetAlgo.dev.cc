@@ -137,6 +137,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         const uint32_t warp = tid / warpSize;
         const uint32_t lane = tid % warpSize;
         const uint32_t nWarps = (threads + warpSize - 1) / warpSize;
+        const int32_t shflWidth = static_cast<int32_t>((threads < warpSize) ? threads : warpSize);
 
         for (int32_t b = alpaka::getIdx<alpaka::Grid, alpaka::Blocks>(acc)[0u]; b < nEntries; b += blocks) {
           const int32_t off = entries.offset()[b];
@@ -165,9 +166,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             continue;
           }
 
+          const double R2 = R * R;
           auto candidate = [&](int32_t k, int32_t nn, double d) {
             const double wk = s.w[k];
-            const double wn = (nn >= 0) ? s.w[nn] : kInf;
+            // a neighbour at or beyond R is no neighbour (FastJet), see FlashJetCore.h
+            const double wn = (nn >= 0 && d < R2) ? s.w[nn] : kInf;
             const double pair = ((wk < wn) ? wk : wn) * d * invR2;
             return (pair < wk) ? pair : wk;
           };
@@ -198,9 +201,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             return bi >= 0 && (ai < 0 || b < a || (b == a && bi < ai));
           };
           auto reduceMin = [&](double value, int32_t index) {
-            for (uint32_t offset = warpSize / 2; offset > 0; offset /= 2) {
-              const double otherValue = alpaka::warp::shfl_down(acc, value, offset);
-              const int32_t otherIndex = alpaka::warp::shfl_down(acc, index, offset);
+            // a block can hold fewer threads than the hardware wave (ROCm waves
+            // are 64 wide): shuffle only across the lanes that exist
+            for (uint32_t offset = shflWidth / 2; offset > 0; offset /= 2) {
+              const double otherValue = alpaka::warp::shfl_down(acc, value, offset, shflWidth);
+              const int32_t otherIndex = alpaka::warp::shfl_down(acc, index, offset, shflWidth);
               if (better(value, index, otherValue, otherIndex)) {
                 value = otherValue;
                 index = otherIndex;
@@ -268,7 +273,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                 const double gbest = s.cand[i];
                 const double wi = s.w[i];
                 const int32_t j = s.nni[i];
-                const double dpair = (j >= 0) ? ((wi < s.w[j]) ? wi : s.w[j]) * s.nnd[i] * invR2 : kInf;
+                const double dpair =
+                    (j >= 0 && s.nnd[i] < R2) ? ((wi < s.w[j]) ? wi : s.w[j]) * s.nnd[i] * invR2 : kInf;
                 if (dpair < wi) {
                   isPair = 1;
                   jSel = j;

@@ -1,3 +1,4 @@
+#include <cmath>
 #include <span>
 #include <string>
 #include <vector>
@@ -9,6 +10,7 @@
 #include "FWCore/ParameterSet/interface/ConfigurationDescriptions.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 #include "FWCore/ParameterSet/interface/ParameterSetDescription.h"
+#include "FWCore/Utilities/interface/Exception.h"
 #include "HeterogeneousCore/SonicTriton/interface/TritonEDProducer.h"
 #include "RecoJets/FlashJet/interface/FlashJetInputs.h"
 #include "RecoJets/FlashJet/interface/FlashJetRecoJets.h"

@@ -6,6 +6,8 @@
 // of O(n^2).  It mirrors the TILED + HEAP path of the FlashJet C++ kernel
 // (flashjet/_cpu_kernel.cpp), which in turn mirrors FastJet's N2MinHeapTiled:
 //
+//   * a pair exactly at dR = R is left to the beam, as in FastJet and in
+//     FlashJetCore.h;
 //   * slots live in a (rapidity, phi) grid whose cells are at least R across,
 //     so every neighbour within R sits in the slot's own cell or the 8 around
 //     it.  A realized merge always has dR < R -- the winning pair (a, b) has
@@ -213,7 +215,7 @@ namespace flashjet {
 
     auto candidate = [&](int32_t k, int32_t nn, double d) {
       const double wk = s.w[k];
-      const double wn = (nn >= 0) ? s.w[nn] : kInf;
+      const double wn = (nn >= 0 && d < R2) ? s.w[nn] : kInf;
       const double pair = ((wk < wn) ? wk : wn) * d * invR2;
       return (pair < wk) ? pair : wk;
     };
@@ -241,7 +243,7 @@ namespace flashjet {
             if (m == k)
               continue;
             const double d = dr2(s.rap[k], s.phi[k], s.rap[m], s.phi[m]);
-            if (d > R2)
+            if (!(d < R2))  // no neighbour at or beyond R, as in FastJet
               continue;
             if (d <= best && (d < best || m < bj)) {
               best = d;
@@ -324,7 +326,7 @@ namespace flashjet {
       const double gbest = s.cand[i];
       const double wi = s.w[i];
       const int32_t j = s.nni[i];
-      const double dpair = (j >= 0) ? ((wi < s.w[j]) ? wi : s.w[j]) * s.nnd[i] * invR2 : kInf;
+      const double dpair = (j >= 0 && s.nnd[i] < R2) ? ((wi < s.w[j]) ? wi : s.w[j]) * s.nnd[i] * invR2 : kInf;
       int32_t nStale = 0;
 
       // the rows a merge invalidates: those pointing at i (which moves or
@@ -388,7 +390,7 @@ namespace flashjet {
               if (k == i)
                 continue;
               const double d = dr2(s.rap[i], s.phi[i], s.rap[k], s.phi[k]);
-              if (d > R2)
+              if (!(d < R2))
                 continue;
               if (d <= best && (d < best || k < bj)) {
                 best = d;

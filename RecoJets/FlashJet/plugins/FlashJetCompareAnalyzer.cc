@@ -2,6 +2,8 @@
 #include <atomic>
 #include <cmath>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "DataFormats/Common/interface/View.h"
 #include "DataFormats/JetReco/interface/Jet.h"
@@ -26,6 +28,22 @@ public:
         tolerance_{config.getParameter<double>("tolerance")},
         failOnMismatch_{config.getParameter<bool>("failOnMismatch")} {}
 
+  // the same constituents, by product and key, not merely as many
+  static bool sameConstituents(reco::Jet const& a, reco::Jet const& b) {
+    if (a.numberOfDaughters() != b.numberOfDaughters())
+      return false;
+    std::vector<std::pair<unsigned int, size_t>> ka, kb;
+    ka.reserve(a.numberOfDaughters());
+    kb.reserve(b.numberOfDaughters());
+    for (size_t i = 0; i < a.numberOfDaughters(); ++i) {
+      ka.emplace_back(a.daughterPtr(i).id().productIndex(), a.daughterPtr(i).key());
+      kb.emplace_back(b.daughterPtr(i).id().productIndex(), b.daughterPtr(i).key());
+    }
+    std::sort(ka.begin(), ka.end());
+    std::sort(kb.begin(), kb.end());
+    return ka == kb;
+  }
+
   void analyze(edm::StreamID, edm::Event const& event, edm::EventSetup const&) const override {
     auto const& ref = event.get(refToken_);
     auto const& test = event.get(testToken_);
@@ -42,7 +60,10 @@ public:
       const double scale = std::max(a.energy(), 1.);
       const double dp = std::abs(a.px() - b.px()) + std::abs(a.py() - b.py()) + std::abs(a.pz() - b.pz()) +
                         std::abs(a.energy() - b.energy());
-      if (dp > tolerance_ * scale || a.numberOfDaughters() != b.numberOfDaughters()) {
+      // NaN fails every comparison, so test for it rather than relying on one
+      const bool finite =
+          std::isfinite(b.px()) && std::isfinite(b.py()) && std::isfinite(b.pz()) && std::isfinite(b.energy());
+      if (!finite || !(dp <= tolerance_ * scale) || !sameConstituents(a, b)) {
         ++bad;
         edm::LogWarning("FlashJetCompare")
             << "event " << event.id() << " jet " << k << ": reference pt " << a.pt() << " eta " << a.eta() << " n "

@@ -42,7 +42,7 @@ public:
         const float a = ref[jet];
         const float b = test[jet];
         ++values_;
-        if (std::abs(a - b) > tolerance_ * std::max(1.f, std::abs(a)) + absoluteTolerance_) {
+        if (!std::isfinite(b) || !(std::abs(a - b) <= tolerance_ * std::max(1.f, std::abs(a)) + absoluteTolerance_)) {
           ++mismatches_;
           edm::LogWarning("FlashJetCompare")
               << "event " << event.id() << " jet " << j << " " << names_[k] << ": reference " << a << ", test " << b;
