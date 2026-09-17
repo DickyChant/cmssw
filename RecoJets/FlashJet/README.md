@@ -1,69 +1,157 @@
 # RecoJets/FlashJet
 
-Prototype integration of [FlashJet](https://github.com/jet-universe/FlashJet),
-batched generalized-kt jet clustering (anti-kt, kt, Cambridge/Aachen, E-scheme),
-in two flavours that produce the same `reco::PFJet` / `reco::GenJet` /
-`reco::BasicJet` collections as `FastjetJetProducer` (no jet areas).
+Prototype integration of [FlashJet](https://github.com/jet-universe/FlashJet) --
+batched generalized-kt jet clustering (anti-kt, kt, Cambridge/Aachen, E-scheme)
+written for GPUs -- into CMSSW, in two flavours that produce the same
+`reco::PFJet` / `reco::GenJet` / `reco::BasicJet` collections as
+`FastjetJetProducer`, plus soft-drop observables as `ValueMap<float>`.
 
-## Alpaka
+Status: **validated, not yet competitive on GPU.** The clustering agrees with
+FastJet exactly on generator-level, Phase-2 PU200 and Run-3 scouting events
+(see [Validation](#validation)), but only the CPU backend is fast enough to be
+interesting today (see [Performance](#performance)).
 
-* `interface/FlashJetCore.h`: the clustering itself, a port of FlashJet's C++
-  kernel (FastJet N2Plain nearest-neighbour strategy, double precision) written
-  as one allocation-free `ALPAKA_FN_HOST_ACC` function.
-* `flashjet::FlashJetDeviceCollection` (`DataFormats/FlashJet`) holds a batch of
-  independent clustering problems ("entries"): a particle block (inputs,
-  particle -> jet index, jet four-momenta, merge history) and an entry block
-  (offset/size, number of jets, soft-drop results).  One kernel call processes
-  all entries, one device thread per entry.
-* `FlashJetProducer@alpaka`: all candidates of the event as one entry;
+## Clustering
+
+`interface/FlashJetCore.h` and `interface/FlashJetTiled.h` hold the algorithm
+itself, as allocation-free `ALPAKA_FN_HOST_ACC` functions that take all their
+working memory from the caller, so the same code runs on the host and inside an
+alpaka kernel:
+
+| | strategy | used by |
+|---|---|---|
+| `clusterEvent` | plain nearest neighbours, O(n^2) | GPU backends, and small entries |
+| `clusterEventTiled` | linked cells on a (rapidity, phi) grid + indexed binary heap + reverse nearest-neighbour index, O(n log n) | CPU backends above 12 particles |
+| `softDrop` | de-clustering of the merge history (`fastjet::contrib::SoftDrop`, scalar_z, larger_pt) | both |
+
+Both strategies produce the same merge history, and the unit test compares them
+directly.  Numerics follow FlashJet: double precision, FastJet's stable
+rapidity, E-scheme sums accumulated in merge order, and every full rescan
+breaking ties towards the lowest slot index.  One deviation from upstream
+FlashJet is deliberate: a pair at exactly `dR = R` is left to the beam, as
+FastJet does (upstream merges it when the softer particle has the lower slot
+index).
+
+## Modules
+
+`flashjet::FlashJetDeviceCollection` (`DataFormats/FlashJet`) holds a batch of
+independent clustering problems ("entries"): a particle block (inputs, particle
+-> jet index, jet four-momenta, merge history) and an entry block (offset/size,
+number of jets, soft-drop result).  One kernel call processes every entry.
+
+* `FlashJetProducer@alpaka` -- all candidates of the event as one entry.
   `FlashJetRecoJetProducer` turns the host copy into reco jets.
-* `FlashJetReclusterProducer@alpaka`: the constituents of every jet of a jet
+* `FlashJetReclusterProducer@alpaka` -- the constituents of every jet of a jet
   collection as one entry each (C/A with R = 1000 by default, like
-  `fastjet::contrib::Recluster`), optionally soft-dropped on the device
-  (`softDrop.enable`); `FlashJetSoftDropProducer` stores mass, pt, zg, rg and
-  nDropped as `ValueMap<float>`s.  `FastjetSoftDropProducer` computes the same
-  ValueMaps with FastJet contrib as a reference.
+  `fastjet::contrib::Recluster`), optionally soft-dropped on the device.
+  `FlashJetSoftDropProducer` writes mass, pt, zg, rg and nDropped as ValueMaps;
+  `FastjetSoftDropProducer` computes the same with FastJet as a reference.
+* `FlashJetSonicProducer` -- sends the candidates to the `flashjet` model on a
+  Triton inference server (`data/models/flashjet`) and builds reco jets from the
+  returned particle -> jet map.  The model pads the requests that arrive
+  together into one batch and clusters them with FlashJet's own Triton kernels
+  (GPU), its C++ kernel, or NumPy.  `test/setupFlashJetModel.sh` points it at a
+  FlashJet checkout and builds the C++ kernel.
 
-The whole-event mode is a single device thread per event; GPU gains are
-expected from the batched modes (many jets per call), and across events from
-SONIC, where the server batches requests from many streams.
-
-## SONIC
-
-* `FlashJetSonicProducer`: sends the candidates of each event to the `flashjet`
-  model on a Triton inference server and builds reco jets from the returned
-  particle -> jet map.
-* `data/models/flashjet`: Triton Python-backend model.  Requests arriving
-  together are padded into one batch and clustered with the FlashJet Triton
-  kernels (GPU server with torch + triton), FlashJet's C++ kernel (CPU), or the
-  NumPy reference.  Point it to a FlashJet checkout with
-  `test/setupFlashJetModel.sh /path/to/FlashJet`, which also builds the C++ kernel.
+On GPU backends one *block* handles one entry, with the threads sharing every
+scan over its particles; on CPU backends one work item handles one entry.
 
 ## Validation
 
-* `testFlashJetCore`: `FlashJetCore.h` vs FastJet on random events
-  (all algorithms, several R, up to 2000 particles): identical constituents,
-  momenta equal to 1e-9.
-* `testFlashJetCore` also checks `softDrop` against `fastjet::contrib::SoftDrop`
-  (groomed four-momentum, zg, rg, dropped count).
-* `test/testFlashJet_cfg.py`: FastJet vs FlashJet (alpaka and/or SONIC) on
-  generator-level jets, jet by jet; `--recluster` adds the batched soft drop of
-  AK8 jets vs FastJet contrib.
+`scram b runtests` runs both:
+
+* `testFlashJetCore` -- the algorithm against FastJet and
+  `fastjet::contrib::SoftDrop` on random events (all algorithms, several radii,
+  up to 2000 particles), tiled against plain, and the `dR = R` boundary.
+* `testFlashJetModules.sh` -- `cmsRun` against `FastjetJetProducer` on generated
+  TTbar events, for the alpaka backend given as its argument.
+
+`test/benchmarkFlashJet_cfg.py --compare` does the same on real events.  Exact
+agreement (0 mismatches) has been established for:
+
+| Input | Whole-event AK4 | Reclustering + soft drop |
+|---|---|---|
+| Generated TTbar (gen particles) | anti-kt, kt, C/A | AK8 |
+| Phase-2 PU200 TTbar MiniAOD (`packedPFCandidates`, N ~ 10200) | 37933 jets | 126010 values (AK4), 27145 (AK8) |
+| Run-3 PF scouting (`hltScoutingPFPacker`, N ~ 320) | 177631 jets | 43660 values (AK4), 6890 (AK8) |
+
+on the CPU backend, the CUDA backend (H100) and SONIC (GPU server).
+
+## Performance
+
+`test/benchmarkFlashJet_cfg.py` (FastTimerService throughput after a warm-up)
+and `test/summarizeBenchmarks.py`.  Numbers below: 4 CPU threads, GPU an H100
+MIG 1g.12gb slice (about 1/7 of a card), best over 1--16 CMSSW streams.
+
+Whole-event anti-kt R = 0.4, throughput in events/s:
+
+| Input (N/event) | FastJet | FlashJet CPU (tiled) | FlashJet CUDA | SONIC |
+|---|---|---|---|---|
+| Scouting (~320) | 6400 | 5100 | 464 | 1745 |
+| Synthetic (~2000) | 1630 | 1240 | 17 | 541 |
+| PU200 MiniAOD (~10200) | 96 | 65 | 0.5 | 23 |
+
+Per-event module time, the same workload:
+
+| Input | FastJet | FlashJet CPU (tiled) | FlashJet CPU (plain, before) |
+|---|---|---|---|
+| Scouting | 0.33 ms | **0.275 ms** | 1.52 ms |
+| Synthetic ~2000 | 1.84 ms | 2.89 ms | 32.0 ms |
+| PU200 | ~15 ms | 40.8 ms | 1318 ms |
+
+What this says:
+
+* The **CPU backend is the usable one**: faster than FastJet on scouting-sized
+  events, within 1.5--3x at higher multiplicity.
+* **Whole-event clustering does not suit a GPU here.**  An event is a serial
+  chain of N merges, and CMSSW hands a module one event at a time, so the
+  parallelism FlashJet was built for (many events per kernel launch) is absent.
+  Giving an event a whole block instead of one thread bought 3--5x; cheaper
+  reductions on top of that bought nothing measurable.
+* **Batching is what helps.**  Per-jet reclustering (many entries per event)
+  brings the GPU within reach of the CPU on scouting, and SONIC -- which batches
+  requests from concurrent streams server-side -- scales from 125 ev/s at one
+  stream to 1745 at sixteen.  Both still lose to FastJet on this slice.
+* The GPU numbers come from 1/7 of an H100; a full card would change them, but
+  not the structure of the problem.
 
 ## Benchmarks and GPU jobs on lxplus
 
-* `test/benchmarkFlashJet_cfg.py`: FastTimerService timing of FastJet, FlashJet
-  alpaka (any backend) and SONIC on synthetic events of tunable multiplicity,
-  for whole-event AK4 clustering and batched AK8 soft drop;
-  `test/summarizeBenchmarks.py` tabulates the JSON output.
-* `test/condor/`: HTCondor GPU jobs for the EosSubmit schedds.
-  ```
-  cmsenv
-  test/condor/prepareCondor.sh /eos/user/X/USER/flashjet_condor /path/to/FlashJet
-  test/condor/makeSonicEnv.sh /eos/user/X/USER/flashjet_condor   # once, for SONIC jobs
-  # on lxplus
-  module load lxbatch/eossubmit
-  condor_submit /eos/user/X/USER/flashjet_condor/flashjet_gpu.sub     # validation + alpaka benchmarks
-  condor_submit /eos/user/X/USER/flashjet_condor/flashjet_sonic.sub   # Triton server with FlashJet GPU kernels
-  ```
-  Edit `tasks_gpu.txt` / `tasks_sonic.txt` in the EOS directory to change the job list.
+`test/condor/` submits to the EosSubmit schedds (everything on EOS, nothing on
+AFS):
+
+```
+cmsenv
+test/condor/prepareCondor.sh /eos/user/X/USER/flashjet_condor /path/to/FlashJet
+test/condor/makeInputs.sh    /eos/user/X/USER/flashjet_condor   # real inputs, once
+test/condor/makeSonicEnv.sh  /eos/user/X/USER/flashjet_condor   # torch+triton for the server, once
+# on lxplus
+module load lxbatch/eossubmit
+condor_submit /eos/user/X/USER/flashjet_condor/flashjet_gpu.sub    # validation + synthetic scans
+condor_submit /eos/user/X/USER/flashjet_condor/flashjet_real.sub   # verification + scans on real inputs
+condor_submit /eos/user/X/USER/flashjet_condor/flashjet_sonic.sub  # Triton server with the GPU kernels
+python3 test/summarizeBenchmarks.py /eos/user/X/USER/flashjet_condor/results/<cluster>
+```
+
+Note the jobs require a GPU newer than Volta: CMSSW_20_1 is built with CUDA 13,
+which needs compute capability >= 7.5, so the submit files exclude V100/P100.
+
+## Known gaps
+
+* **No jet areas or ghosts**, so this cannot replace jets that carry the
+  rho-area pileup correction.
+* **PUPPI weights are not applied**: the recluster producers take the daughter
+  four-vectors as they are.  The FastJet reference producer does the same, so
+  their agreement does not by itself prove agreement with standard weighted
+  grooming.
+* **Backend reproducibility**: the alpaka path is double precision, while
+  FlashJet's Triton kernels (used through SONIC) are float32 and can order
+  near-degenerate merges differently; SONIC also sums jet constituents in input
+  order rather than merge order.
+* **Only ValueMaps** are produced for grooming: no groomed jet collection and no
+  subjet association.
+* **HLT**: no multiplicity or latency guard, no fallback policy if a server is
+  unavailable, and no tail-latency measurement.
+* **Licensing**: FlashJet is GPL-3.0 and CMSSW is Apache-2.0.  The kernels here
+  are a port of GPL code and would have to be relicensed, or kept in an external
+  package, before this could go to `cms-sw/cmssw`.
