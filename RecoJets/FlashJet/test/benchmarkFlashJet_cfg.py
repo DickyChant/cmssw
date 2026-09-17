@@ -22,6 +22,10 @@ parser.add_argument("--nJets", default=6, type=int)
 parser.add_argument("--nPerJet", default=80, type=int)
 parser.add_argument("--entriesPerThread", default=1, type=int)
 parser.add_argument("--json", default="benchmark.json", type=str)
+parser.add_argument("--warmup", default=-1, type=int,
+                    help="events excluded from the throughput measurement (default: 10%% of --maxEvents)")
+parser.add_argument("--resolution", default=0, type=int,
+                    help="ThroughputService sampling in events (default: about 50 samples)")
 options = getOptions(parser, verbose=True)
 if options.impl == "sonic" and options.workflow != "ak4":
     raise ValueError("the SONIC producer implements the ak4 workflow only")
@@ -42,13 +46,21 @@ process.load("HLTrigger.Timer.FastTimerService_cfi")
 process.FastTimerService.writeJSONSummary = True
 process.FastTimerService.jsonFileName = options.json
 process.FastTimerService.enableDQM = False
+# throughput: wall-clock event rate after a warm-up (GPU context, JIT, caching allocators)
+nEvents = max(options.maxEvents, 1)
+warmup = options.warmup if options.warmup >= 0 else nEvents // 10
+resolution = options.resolution if options.resolution > 0 else max(1, (nEvents - warmup) // 50)
 process.ThroughputService = cms.Service(
     "ThroughputService",
     enableDQM=cms.untracked.bool(False),
-    printEventSummary=cms.untracked.bool(True),
-    eventRange=cms.untracked.uint32(1000000),
-    eventResolution=cms.untracked.uint32(100),
+    printEventSummary=cms.untracked.bool(False),
+    eventRange=cms.untracked.uint32(nEvents + 1),
+    eventResolution=cms.untracked.uint32(resolution),
+    eventSkip=cms.untracked.uint32(warmup),
 )
+# the summary ("Average throughput: ...") is a LogInfo
+process.MessageLogger.cerr.ThroughputService = cms.untracked.PSet(limit=cms.untracked.int32(100))
+process.MessageLogger.ThroughputService = dict()
 
 process.particles = cms.EDProducer(
     "FlashJetRandomCandidateProducer", nSoft=cms.int32(options.nSoft), nJets=cms.int32(options.nJets),
@@ -106,3 +118,13 @@ else:
         process.path += process.clusters + process.softdrop
 
 process = applyOptions(process, options)
+
+# metadata for summarizeBenchmarks.py, next to the timing JSON
+import json as _json
+with open(options.json.removesuffix(".json") + ".meta.json", "w") as _meta:
+    _json.dump(dict(workflow=options.workflow, impl=options.impl,
+                    backend=options.backend if options.impl == "alpaka" else options.impl,
+                    nSoft=options.nSoft, nJets=options.nJets, nPerJet=options.nPerJet,
+                    threads=process.options.numberOfThreads.value(),
+                    streams=process.options.numberOfStreams.value() or process.options.numberOfThreads.value(),
+                    events=options.maxEvents, warmup=warmup), _meta, indent=1)

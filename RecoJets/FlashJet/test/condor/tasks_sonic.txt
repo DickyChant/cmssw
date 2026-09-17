@@ -1,3 +1,3 @@
 sonic_validate, sonic-validate
-ak4_sonic_n1500, sonic-bench 1500 4 2000
-ak4_sonic_n5000, sonic-bench 5000 4 500
+sonic_scan_n1500, sonic-scan 1500
+sonic_scan_n5000, sonic-scan 5000
