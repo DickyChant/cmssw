@@ -4,6 +4,7 @@
 #include "HeterogeneousCore/AlpakaInterface/interface/memory.h"
 #include "HeterogeneousCore/AlpakaInterface/interface/workdivision.h"
 #include "RecoJets/FlashJet/interface/FlashJetCore.h"
+#include "RecoJets/FlashJet/interface/FlashJetTiled.h"
 
 #include "FlashJetAlgo.h"
 
@@ -44,28 +45,31 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                     double p,
                                     FlashJetAlgo::SoftDrop softDrop,
                                     double* fscratch,
-                                    int32_t* iscratch) const {
+                                    int32_t* iscratch,
+                                    int32_t* tscratch) const {
         for (int32_t b : uniform_elements(acc, entries.metadata().size())) {
           const int32_t off = entries.offset()[b];
           const int32_t n = entries.size()[b];
           const auto s = entryScratch(fscratch, iscratch, off, n);
-          const int32_t nJets = ::flashjet::clusterEvent(n,
-                                                         R,
-                                                         p,
-                                                         particles.px().data() + off,
-                                                         particles.py().data() + off,
-                                                         particles.pz().data() + off,
-                                                         particles.e().data() + off,
-                                                         particles.histP1().data() + off,
-                                                         particles.histP2().data() + off,
-                                                         particles.histChild().data() + off,
-                                                         particles.histD().data() + off,
-                                                         particles.jetIdx().data() + off,
-                                                         particles.jetPx().data() + off,
-                                                         particles.jetPy().data() + off,
-                                                         particles.jetPz().data() + off,
-                                                         particles.jetE().data() + off,
-                                                         s);
+          const auto t = ::flashjet::makeTiledScratch(tscratch + ::flashjet::kTiledIntScratch * off, n);
+          const int32_t nJets = ::flashjet::clusterEventTiled(n,
+                                                              R,
+                                                              p,
+                                                              particles.px().data() + off,
+                                                              particles.py().data() + off,
+                                                              particles.pz().data() + off,
+                                                              particles.e().data() + off,
+                                                              particles.histP1().data() + off,
+                                                              particles.histP2().data() + off,
+                                                              particles.histChild().data() + off,
+                                                              particles.histD().data() + off,
+                                                              particles.jetIdx().data() + off,
+                                                              particles.jetPx().data() + off,
+                                                              particles.jetPy().data() + off,
+                                                              particles.jetPz().data() + off,
+                                                              particles.jetE().data() + off,
+                                                              s,
+                                                              t);
           entries.nJets()[b] = nJets;
           ::flashjet::SoftDropResult sd{0., 0., 0., 0., 0., 0., 0};
           if (softDrop.enable) {
@@ -398,6 +402,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     auto fscratch = make_device_buffer<double[]>(queue, ::flashjet::kFloatScratch * nParticles);
     auto iscratch = make_device_buffer<int32_t[]>(queue, ::flashjet::kIntScratch * nParticles);
     if constexpr (requires_single_thread_per_block_v<Acc1D>) {
+      // the CPU path uses the tiled, heap-driven strategy (O(n log n))
+      auto tscratch = make_device_buffer<int32_t[]>(queue, ::flashjet::kTiledIntScratch * nParticles);
       const uint32_t items = entriesPerThread_;
       auto workDiv = make_workdiv<Acc1D>(divide_up_by(nEntries, items), items);
       alpaka::exec<Acc1D>(queue,
@@ -409,7 +415,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                           p_,
                           softDrop_,
                           fscratch.data(),
-                          iscratch.data());
+                          iscratch.data(),
+                          tscratch.data());
     } else {
       // one block per entry; no more threads than the largest entry has particles
       uint32_t threads = kBlockThreads;

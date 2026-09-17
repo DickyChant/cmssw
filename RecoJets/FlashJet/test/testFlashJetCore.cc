@@ -12,6 +12,7 @@
 #include <fastjet/contrib/SoftDrop.hh>
 
 #include "RecoJets/FlashJet/interface/FlashJetCore.h"
+#include "RecoJets/FlashJet/interface/FlashJetTiled.h"
 
 namespace {
 
@@ -45,6 +46,65 @@ namespace {
     for (auto& j : jets)
       std::sort(j.first.begin(), j.first.end());
     std::sort(jets.begin(), jets.end());
+  }
+
+  // the tiled strategy must give the same merge history as the plain one
+  void checkTiledMatchesPlain(Particles const& in, double R, double p) {
+    const int n = in.px.size();
+    std::vector<int32_t> h1(n), h2(n), hc(n), jetIdx(n), iscr(flashjet::kIntScratch * n);
+    std::vector<double> hd(n), jpx(n), jpy(n), jpz(n), je(n), fscr(flashjet::kFloatScratch * n);
+    std::vector<int32_t> h1t(n), h2t(n), hct(n), jetIdxT(n), iscrT(flashjet::kIntScratch * n);
+    std::vector<double> hdt(n), jpxt(n), jpyt(n), jpzt(n), jet(n), fscrT(flashjet::kFloatScratch * n);
+    std::vector<int32_t> tiled(flashjet::kTiledIntScratch * n);
+    const auto s = flashjet::makeScratch(fscr.data(), iscr.data(), n);
+    const auto st = flashjet::makeScratch(fscrT.data(), iscrT.data(), n);
+    const auto t = flashjet::makeTiledScratch(tiled.data(), n);
+    const int nPlain = flashjet::clusterEvent(n,
+                                              R,
+                                              p,
+                                              in.px.data(),
+                                              in.py.data(),
+                                              in.pz.data(),
+                                              in.e.data(),
+                                              h1.data(),
+                                              h2.data(),
+                                              hc.data(),
+                                              hd.data(),
+                                              jetIdx.data(),
+                                              jpx.data(),
+                                              jpy.data(),
+                                              jpz.data(),
+                                              je.data(),
+                                              s);
+    const int nTiled = flashjet::clusterEventTiled(n,
+                                                   R,
+                                                   p,
+                                                   in.px.data(),
+                                                   in.py.data(),
+                                                   in.pz.data(),
+                                                   in.e.data(),
+                                                   h1t.data(),
+                                                   h2t.data(),
+                                                   hct.data(),
+                                                   hdt.data(),
+                                                   jetIdxT.data(),
+                                                   jpxt.data(),
+                                                   jpyt.data(),
+                                                   jpzt.data(),
+                                                   jet.data(),
+                                                   st,
+                                                   t);
+    REQUIRE(nTiled == nPlain);
+    REQUIRE(h1t == h1);
+    REQUIRE(h2t == h2);
+    REQUIRE(hct == hc);
+    REQUIRE(jetIdxT == jetIdx);
+    for (int k = 0; k < nPlain; ++k) {
+      REQUIRE(jpxt[k] == jpx[k]);
+      REQUIRE(jpyt[k] == jpy[k]);
+      REQUIRE(jpzt[k] == jpz[k]);
+      REQUIRE(jet[k] == je[k]);
+    }
   }
 
   Jets runFlashJet(Particles const& in, double R, double p) {
@@ -112,6 +172,7 @@ TEST_CASE("FlashJet core matches FastJet", "[FlashJet]") {
       for (int n : {1, 2, 3, 7, 30, 150, 600, 2000}) {
         DYNAMIC_SECTION("p=" << p << " R=" << R << " n=" << n) {
           const auto event = makeEvent(n, rng);
+          checkTiledMatchesPlain(event, R, p);
           const auto flash = runFlashJet(event, R, p);
           const auto fast = runFastJet(event, R, p);
           REQUIRE(flash.size() == fast.size());
