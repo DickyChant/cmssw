@@ -29,17 +29,21 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def _import_flashjet():
-    try:
-        import flashjet  # noqa: F401
-        return
-    except ImportError:
-        pass
+    # The explicit locations go first: the model directory itself is named
+    # "flashjet" and sits on the Python path of the backend stub, so a bare
+    # "import flashjet" can resolve to it as an empty namespace package.
     for base in (os.environ.get("FLASHJET_PATH"), os.path.join(HERE, "flashjet_src")):
-        if base and os.path.isdir(os.path.join(base, "flashjet")):
+        if base and os.path.isfile(os.path.join(base, "flashjet", "__init__.py")):
             sys.path.insert(0, base)
-            import flashjet  # noqa: F401
-            return
-    raise ImportError("flashjet not found: install it, set FLASHJET_PATH, or run setupFlashJetModel.sh")
+            break
+    sys.modules.pop("flashjet", None)
+    import flashjet
+
+    if not hasattr(flashjet, "cluster"):
+        raise ImportError(
+            f"'flashjet' resolved to {getattr(flashjet, '__path__', flashjet)}, not the FlashJet package: "
+            "install it, set FLASHJET_PATH, or run setupFlashJetModel.sh"
+        )
 
 
 def _jet_idx_from_history(hp1, hp2, hch, n):
