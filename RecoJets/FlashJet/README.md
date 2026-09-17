@@ -87,9 +87,28 @@ Whole-event anti-kt R = 0.4, throughput in events/s:
 
 | Input (N/event) | FastJet | FlashJet CPU (tiled) | FlashJet CUDA | SONIC |
 |---|---|---|---|---|
-| Scouting (~320) | 6400 | 5100 | 464 | 1745 |
-| Synthetic (~2000) | 1630 | 1240 | 17 | 541 |
-| PU200 MiniAOD (~10200) | 96 | 65 | 0.5 | 23 |
+| Scouting (~320) | 6476 | 5415 | 624 | 1745 |
+| Synthetic (~2000) | 1630 | 1152 | 23 | 541 |
+| Synthetic (~5500) | 579 | 270 | 3.2 | 86 |
+| PU200 MiniAOD (~10200) | 97 | 69 | 0.7 | 23 |
+
+Reclustering every jet of the event and soft-dropping it -- many entries per
+kernel call -- in events/s:
+
+| Workload | FastJet | FlashJet CPU (tiled) | FlashJet CUDA |
+|---|---|---|---|
+| AK4 jets, scouting | 5997 | 5143 | 4357 |
+| AK8 jets, synthetic (~2000) | 1219 | 1105 | 1151 |
+| AK8 jets, synthetic (~5500) | 331 | 266 | **455** |
+
+The last row is the one case measured so far where the GPU wins (1.37x over
+FastJet), and it scales with streams (62 / 235 / 381 / 455 at 1 / 4 / 8 / 16):
+enough jets per event, each with enough constituents to fill a block.  The
+SONIC column above is a separate round (its server batches across streams
+rather than within the event).
+
+Numbers on these shared MIG slices vary by up to ~35% between rounds, so
+compare implementations within one job, not across rounds.
 
 Per-event module time, the same workload:
 
@@ -109,9 +128,10 @@ What this says:
   Giving an event a whole block instead of one thread bought 3--5x; cheaper
   reductions on top of that bought nothing measurable.
 * **Batching is what helps.**  Per-jet reclustering (many entries per event)
-  brings the GPU within reach of the CPU on scouting, and SONIC -- which batches
-  requests from concurrent streams server-side -- scales from 125 ev/s at one
-  stream to 1745 at sixteen.  Both still lose to FastJet on this slice.
+  brings the GPU level with the CPU, and ahead of it for AK8 jets at high
+  multiplicity; SONIC -- which batches requests from concurrent streams
+  server-side -- scales from 125 ev/s at one stream to 1745 at sixteen, though
+  it still loses to FastJet on this slice.
 * The GPU numbers come from 1/7 of an H100; a full card would change them, but
   not the structure of the problem.
 
