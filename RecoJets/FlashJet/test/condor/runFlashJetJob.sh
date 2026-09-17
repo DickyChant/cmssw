@@ -5,7 +5,6 @@
 #   runFlashJetJob.sh CLUSTER NAME sonic-validate
 #   runFlashJetJob.sh CLUSTER NAME sonic-bench NSOFT THREADS EVENTS
 # Outputs go to results/CLUSTER/NAME/ (transferred back to the EOS job directory).
-set -x
 CLUSTER=$1 NAME=$2 TASK=$3
 shift 3
 TOP=$PWD
