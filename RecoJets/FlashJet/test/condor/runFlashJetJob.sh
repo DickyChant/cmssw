@@ -105,7 +105,8 @@ events_for() {  # events_for IMPL SOURCE WORKFLOW STREAMS
     miniaod:*) scale=1 ;;
     scouting:*)   # ~300 particles per event
       case $impl in fastjet|serial_sync) scale=-5 ;; *) scale=1 ;; esac ;;
-    *) [ "$source" -gt 2500 ] && scale=4 || scale=1 ;;
+    # whole-event CUDA is one serial GPU thread per event: ~1 s at N ~ 2000, ~6 s at N ~ 5500
+    *) if [ "$source" -gt 2500 ]; then case $impl:$workflow in cuda_async:ak4) scale=16 ;; *) scale=4 ;; esac; else scale=1; fi ;;
   esac
   case $source in miniaod) available=2000 ;; scouting) available=30000 ;; esac
   local n
