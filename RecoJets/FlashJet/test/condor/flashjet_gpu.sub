@@ -1,0 +1,20 @@
+# FlashJet GPU validation and benchmarks, for the EosSubmit schedds:
+#   module load lxbatch/eossubmit && condor_submit @EOSDIR@/flashjet_gpu.sub
+executable            = @EOSDIR@/runFlashJetJob.sh
+initialdir            = @EOSDIR@
+arguments             = $(ClusterId) $(name) $(task)
+transfer_input_files  = cmssw.tar.gz, job.env
+transfer_output_files = results
+log                   = logs/flashjet_gpu.$(ClusterId).log
+output                = logs/$(name).$(ClusterId).out
+error                 = logs/$(name).$(ClusterId).err
+
+request_gpus          = 1
+request_cpus          = 8
+request_memory        = 16 GB
+MY.WantOS             = "el9"
++MaxRuntime           = 7200
+# optionally pin a GPU model, e.g.
+# requirements        = regexp("A100", TARGET.GPUs_DeviceName)
+
+queue name, task from @EOSDIR@/tasks_gpu.txt

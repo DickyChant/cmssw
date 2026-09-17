@@ -18,6 +18,8 @@ parser.add_argument("--sonic", default=False, action="store_true", help="run the
 parser.add_argument("--mode", default="PseudoAsync", choices=["Async", "PseudoAsync", "Sync"], help="SONIC client mode")
 parser.add_argument("--jetAlgorithm", default="AntiKt", choices=["AntiKt", "Kt", "CambridgeAachen"])
 parser.add_argument("--rParam", default=0.4, type=float)
+parser.add_argument("--recluster", default=False, action="store_true",
+                    help="also recluster + soft drop the constituents of every AK8 jet in one batched alpaka call")
 parser.add_argument("--failOnMismatch", default=False, action="store_true")
 options = getOptions(parser, verbose=True)
 
@@ -76,6 +78,39 @@ if options.alpaka:
     )
     process.task.add(process.flashJetClusters, process.flashJetGenJets)
     process.path += process.compareAlpaka
+
+if options.alpaka and options.recluster:
+    from RecoJets.JetProducers.ak8GenJets_cfi import ak8GenJets
+
+    process.fastjetAK8GenJets = ak8GenJets.clone(src="genParticlesForJetsNoNu", jetPtMin=100.0)
+    softDrop = dict(zcut=0.1, beta=0.0, R0=0.8)
+    process.flashJetRecluster = cms.EDProducer(
+        "FlashJetReclusterProducer@alpaka",
+        src=cms.InputTag("fastjetAK8GenJets"),
+        jetPtMin=cms.double(0.0),
+        jetAlgorithm=cms.string("CambridgeAachen"),
+        rParam=cms.double(1000.0),
+        softDrop=cms.PSet(enable=cms.bool(True), **{k: cms.double(v) for k, v in softDrop.items()}),
+        alpaka=cms.untracked.PSet(backend=cms.untracked.string(options.alpaka)),
+    )
+    process.flashJetSoftDrop = cms.EDProducer(
+        "FlashJetSoftDropProducer", jets=cms.InputTag("fastjetAK8GenJets"), clusters=cms.InputTag("flashJetRecluster")
+    )
+    process.fastjetSoftDrop = cms.EDProducer(
+        "FastjetSoftDropProducer",
+        jets=cms.InputTag("fastjetAK8GenJets"),
+        jetPtMin=cms.double(0.0),
+        **{k: cms.double(v) for k, v in softDrop.items()},
+    )
+    process.compareSoftDrop = cms.EDAnalyzer(
+        "FlashJetValueMapCompareAnalyzer",
+        jets=cms.InputTag("fastjetAK8GenJets"),
+        reference=cms.string("fastjetSoftDrop"),
+        test=cms.string("flashJetSoftDrop"),
+        failOnMismatch=cms.bool(options.failOnMismatch),
+    )
+    process.task.add(process.fastjetAK8GenJets, process.flashJetRecluster, process.flashJetSoftDrop, process.fastjetSoftDrop)
+    process.path += process.compareSoftDrop
 
 if options.sonic:
     process.load("HeterogeneousCore.SonicTriton.TritonService_cff")

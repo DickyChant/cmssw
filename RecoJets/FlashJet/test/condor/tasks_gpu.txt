@@ -1,0 +1,13 @@
+validate, validate
+ak4_fastjet_n1500, bench ak4 fastjet serial_sync 1500 8 2000
+ak4_serial_n1500, bench ak4 alpaka serial_sync 1500 8 2000
+ak4_cuda_n1500, bench ak4 alpaka cuda_async 1500 8 2000
+ak4_fastjet_n5000, bench ak4 fastjet serial_sync 5000 8 500
+ak4_serial_n5000, bench ak4 alpaka serial_sync 5000 8 500
+ak4_cuda_n5000, bench ak4 alpaka cuda_async 5000 8 500
+softdrop_fastjet_n1500, bench softdrop fastjet serial_sync 1500 8 2000
+softdrop_serial_n1500, bench softdrop alpaka serial_sync 1500 8 2000
+softdrop_cuda_n1500, bench softdrop alpaka cuda_async 1500 8 2000
+softdrop_fastjet_n5000, bench softdrop fastjet serial_sync 5000 8 500
+softdrop_serial_n5000, bench softdrop alpaka serial_sync 5000 8 500
+softdrop_cuda_n5000, bench softdrop alpaka cuda_async 5000 8 500

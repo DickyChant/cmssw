@@ -1,0 +1,20 @@
+# FlashJet SONIC on GPU: a Triton server with the FlashJet Triton kernels runs
+# inside the job.  Needs flashjet.tar.gz and flashjet_pyenv.tar.gz (makeSonicEnv.sh).
+#   module load lxbatch/eossubmit && condor_submit @EOSDIR@/flashjet_sonic.sub
+executable            = @EOSDIR@/runFlashJetJob.sh
+initialdir            = @EOSDIR@
+arguments             = $(ClusterId) $(name) $(task)
+transfer_input_files  = cmssw.tar.gz, job.env, flashjet.tar.gz, flashjet_pyenv.tar.gz
+transfer_output_files = results
+log                   = logs/flashjet_sonic.$(ClusterId).log
+output                = logs/$(name).$(ClusterId).out
+error                 = logs/$(name).$(ClusterId).err
+
+request_gpus          = 1
+request_cpus          = 8
+request_memory        = 24 GB
+request_disk          = 20 GB
+MY.WantOS             = "el9"
++MaxRuntime           = 7200
+
+queue name, task from @EOSDIR@/tasks_sonic.txt

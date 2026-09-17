@@ -1,4 +1,4 @@
-#include <cmath>
+#include <cstdint>
 #include <string>
 
 #include "DataFormats/Candidate/interface/Candidate.h"
@@ -18,10 +18,9 @@
 
 namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
-  // Clusters the candidates of `src` into jets on the alpaka device and puts
-  // a flashjet::FlashJetDeviceCollection (particle -> jet map, jet
-  // four-momenta and merge history).  Use FlashJetRecoJetProducer to turn the
-  // host copy into reco::*Jet collections.
+  // Clusters all candidates of `src` (one entry per event) on the alpaka
+  // device and puts a flashjet::FlashJetDeviceCollection.  Use
+  // FlashJetRecoJetProducer to turn the host copy into reco::*Jet collections.
   class FlashJetProducer : public global::EDProducer<> {
   public:
     FlashJetProducer(edm::ParameterSet const& config)
@@ -29,27 +28,30 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
           srcToken_{consumes(config.getParameter<edm::InputTag>("src"))},
           putToken_{produces()},
           inputPtMin_{config.getParameter<double>("inputPtMin")},
-          algo_{config.getParameter<double>("rParam"),
-                ::flashjet::exponentOf(config.getParameter<std::string>("jetAlgorithm"))} {}
+          algo_{config} {}
 
     void produce(edm::StreamID, device::Event& event, device::EventSetup const&) const override {
       auto const& cands = event.get(srcToken_);
       auto const selected = ::flashjet::selectInputs(cands, inputPtMin_);
       const int32_t n = selected.size();
 
-      ::flashjet::FlashJetHostCollection host{event.queue(), n};
-      auto view = host.view();
-      view.nJets() = 0;
+      ::flashjet::FlashJetHostCollection host{event.queue(), n, 1};
+      auto particles = host.view().particles();
       for (int32_t k = 0; k < n; ++k) {
         auto const& c = cands[selected[k]];
-        view.px()[k] = c.px();
-        view.py()[k] = c.py();
-        view.pz()[k] = c.pz();
-        view.e()[k] = c.energy();
-        view.candIdx()[k] = selected[k];
+        particles.px()[k] = c.px();
+        particles.py()[k] = c.py();
+        particles.pz()[k] = c.pz();
+        particles.e()[k] = c.energy();
+        particles.candIdx()[k] = selected[k];
       }
+      auto entries = host.view().entries();
+      entries.offset()[0] = 0;
+      entries.size()[0] = n;
+      entries.source()[0] = -1;
+      entries.nJets()[0] = 0;
 
-      flashjet::FlashJetDeviceCollection device{event.queue(), n};
+      flashjet::FlashJetDeviceCollection device{event.queue(), n, 1};
       alpaka::memcpy(event.queue(), device.buffer(), host.const_buffer());
       algo_.cluster(event.queue(), device);
       event.emplace(putToken_, std::move(device));
@@ -58,9 +60,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     static void fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
       edm::ParameterSetDescription desc;
       desc.add<edm::InputTag>("src", edm::InputTag("particleFlow"));
-      desc.add<std::string>("jetAlgorithm", "AntiKt")->setComment("AntiKt, Kt or CambridgeAachen");
-      desc.add<double>("rParam", 0.4);
       desc.add<double>("inputPtMin", 0.)->setComment("drop input candidates with pt below this");
+      FlashJetAlgo::fillPSetDescription(desc, "AntiKt", 0.4);
       descriptions.addWithDefaultLabel(desc);
     }
 

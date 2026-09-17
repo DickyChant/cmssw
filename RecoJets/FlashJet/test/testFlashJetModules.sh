@@ -14,5 +14,5 @@ cmsDriver.py TTbar_14TeV_TuneCP5_cfi -s GEN --conditions auto:phase1_2024_realis
   -n 10 --fileout file:flashjet_gen.root --python_filename flashjet_gen_cfg.py
 for ALGO in AntiKt Kt CambridgeAachen; do
   cmsRun ${SCRAM_TEST_PATH}/testFlashJet_cfg.py --inputFiles file:flashjet_gen.root \
-    --alpaka $BACKEND --jetAlgorithm $ALGO --failOnMismatch
+    --alpaka $BACKEND --jetAlgorithm $ALGO --recluster --failOnMismatch
 done

@@ -77,23 +77,54 @@ namespace flashjet {
     }
   }  // namespace detail
 
-  // Working memory for one event of n particles.
+  // Working memory for one event of n particles: kFloatScratch * n doubles
+  // and kIntScratch * n int32 (see makeScratch).
   struct Scratch {
-    double* px;      // [n] current pseudojet momenta (mutated)
-    double* py;      // [n]
-    double* pz;      // [n]
-    double* e;       // [n]
-    double* rap;     // [n]
-    double* phi;     // [n]
-    double* w;       // [n] beam distance kt^(2p)
-    double* nnd;     // [n] geometric NN distance dR^2
-    double* cand;    // [n] per-slot candidate distance
-    int32_t* nni;    // [n] geometric NN slot
-    int32_t* ids;    // [n] pseudojet id held by the slot
-    int32_t* act;    // [n] 1 if the slot is live
-    int32_t* stale;  // [n] rows to rescan after a merge
-    int32_t* jetOf;  // [2n] jet index of every pseudojet id (decode)
+    double* px;       // [n] current pseudojet momenta (mutated)
+    double* py;       // [n]
+    double* pz;       // [n]
+    double* e;        // [n]
+    double* rap;      // [n]
+    double* phi;      // [n]
+    double* w;        // [n] beam distance kt^(2p)
+    double* nnd;      // [n] geometric NN distance dR^2
+    double* cand;     // [n] per-slot candidate distance
+    double* pjPx;     // [2n] four-momentum of every pseudojet id (grooming)
+    double* pjPy;     // [2n]
+    double* pjPz;     // [2n]
+    double* pjE;      // [2n]
+    int32_t* nni;     // [n] geometric NN slot
+    int32_t* ids;     // [n] pseudojet id held by the slot
+    int32_t* act;     // [n] 1 if the slot is live
+    int32_t* stale;   // [n] rows to rescan after a merge
+    int32_t* jetOf;   // [2n] jet index of every pseudojet id (decode)
+    int32_t* stepOf;  // [2n] history step that created a pseudojet id (grooming)
   };
+
+  inline constexpr int32_t kFloatScratch = 17;
+  inline constexpr int32_t kIntScratch = 8;
+
+  ALPAKA_FN_HOST_ACC inline Scratch makeScratch(double* f, int32_t* i, int32_t n) {
+    return Scratch{f,
+                   f + n,
+                   f + 2 * n,
+                   f + 3 * n,
+                   f + 4 * n,
+                   f + 5 * n,
+                   f + 6 * n,
+                   f + 7 * n,
+                   f + 8 * n,
+                   f + 9 * n,
+                   f + 11 * n,
+                   f + 13 * n,
+                   f + 15 * n,
+                   i,
+                   i + n,
+                   i + 2 * n,
+                   i + 3 * n,
+                   i + 4 * n,
+                   i + 6 * n};
+  }
 
   // Clusters one event.
   //
@@ -264,6 +295,107 @@ namespace flashjet {
       jetIdx[k] = s.jetOf[k];
 
     return nJets;
+  }
+
+  struct SoftDropResult {
+    double px, py, pz, e;  // groomed jet
+    double zg, rg;         // momentum sharing and opening angle of the accepted split (0 if none)
+    int32_t nDropped;      // branches removed
+  };
+
+  // Soft drop (FastJet contrib SoftDrop, scalar_z symmetry measure, larger_pt
+  // recursion) of the hardest jet of an event clustered by clusterEvent.
+  // Meant for C/A histories: the declustering follows the merge tree, and a
+  // split with z = min(pt1, pt2) / (pt1 + pt2) is kept when
+  //   z > zcut * (dR12 / R0)^beta.
+  ALPAKA_FN_HOST_ACC inline SoftDropResult softDrop(int32_t n,
+                                                    int32_t nJets,
+                                                    double zcut,
+                                                    double beta,
+                                                    double R0,
+                                                    double const* inPx,
+                                                    double const* inPy,
+                                                    double const* inPz,
+                                                    double const* inE,
+                                                    int32_t const* histP1,
+                                                    int32_t const* histP2,
+                                                    int32_t const* histChild,
+                                                    double const* jetPx,
+                                                    double const* jetPy,
+                                                    Scratch const& s) {
+    using namespace detail;
+    SoftDropResult result{0., 0., 0., 0., 0., 0., 0};
+    if (n <= 0 || nJets <= 0)
+      return result;
+
+    // four-momentum of every pseudojet, summed in merge order
+    for (int32_t k = 0; k < n; ++k) {
+      s.pjPx[k] = inPx[k];
+      s.pjPy[k] = inPy[k];
+      s.pjPz[k] = inPz[k];
+      s.pjE[k] = inE[k];
+    }
+    int32_t hardest = 0;
+    for (int32_t j = 1; j < nJets; ++j) {
+      if (jetPx[j] * jetPx[j] + jetPy[j] * jetPy[j] > jetPx[hardest] * jetPx[hardest] + jetPy[hardest] * jetPy[hardest])
+        hardest = j;
+    }
+    int32_t node = -1;
+    int32_t beams = 0;
+    for (int32_t step = 0; step < n; ++step) {
+      const int32_t a = histP1[step];
+      if (histP2[step] < 0) {
+        if (beams++ == hardest)
+          node = a;
+        continue;
+      }
+      const int32_t b = histP2[step];
+      const int32_t c = histChild[step];
+      s.pjPx[c] = s.pjPx[a] + s.pjPx[b];
+      s.pjPy[c] = s.pjPy[a] + s.pjPy[b];
+      s.pjPz[c] = s.pjPz[a] + s.pjPz[b];
+      s.pjE[c] = s.pjE[a] + s.pjE[b];
+      s.stepOf[c] = step;
+    }
+    if (node < 0)
+      return result;
+
+    const double invR0 = 1. / R0;
+    while (node >= n) {
+      const int32_t step = s.stepOf[node];
+      int32_t a = histP1[step];
+      int32_t b = histP2[step];
+      double pt2a = s.pjPx[a] * s.pjPx[a] + s.pjPy[a] * s.pjPy[a];
+      double pt2b = s.pjPx[b] * s.pjPx[b] + s.pjPy[b] * s.pjPy[b];
+      if (pt2a < pt2b) {
+        const int32_t t = a;
+        a = b;
+        b = t;
+        const double u = pt2a;
+        pt2a = pt2b;
+        pt2b = u;
+      }
+      const double pta = std::sqrt(pt2a);
+      const double ptb = std::sqrt(pt2b);
+      const double z = ptb / (pta + ptb);
+      double rapA, phiA, rapB, phiB, kt2;
+      rapPhiKt2(s.pjPx[a], s.pjPy[a], s.pjPz[a], s.pjE[a], rapA, phiA, kt2);
+      rapPhiKt2(s.pjPx[b], s.pjPy[b], s.pjPz[b], s.pjE[b], rapB, phiB, kt2);
+      const double dR = std::sqrt(dr2(rapA, phiA, rapB, phiB));
+      const double threshold = (beta == 0.) ? zcut : zcut * std::pow(dR * invR0, beta);
+      if (z > threshold) {
+        result.zg = z;
+        result.rg = dR;
+        break;
+      }
+      ++result.nDropped;
+      node = a;
+    }
+    result.px = s.pjPx[node];
+    result.py = s.pjPy[node];
+    result.pz = s.pjPz[node];
+    result.e = s.pjE[node];
+    return result;
   }
 
 }  // namespace flashjet

@@ -25,14 +25,17 @@ public:
   void produce(edm::StreamID, edm::Event& event, edm::EventSetup const&) const override {
     auto const& cands = event.get(srcToken_);
     auto const& clusters = event.get(clusterToken_);
-    auto const view = clusters.const_view();
-    const size_t n = view.metadata().size();
-    const int32_t nJets = n > 0 ? view.nJets() : 0;
+    auto const particles = clusters.const_view().particles();
+    auto const entries = clusters.const_view().entries();
+    if (entries.metadata().size() != 1)
+      throw cms::Exception("FlashJet") << "FlashJetRecoJetProducer expects one entry per event (FlashJetProducer), got "
+                                       << entries.metadata().size();
+    const int32_t nJets = entries.nJets()[0];
 
-    auto jets = flashjet::groupJets(cands, view.candIdx(), view.jetIdx(), nJets);
+    auto jets = flashjet::groupJets(cands, particles.candIdx(), particles.jetIdx(), nJets);
     // use the sums accumulated in merge order, as FastJet does
     for (int32_t j = 0; j < nJets; ++j)
-      jets[j].p4.SetPxPyPzE(view.jetPx()[j], view.jetPy()[j], view.jetPz()[j], view.jetE()[j]);
+      jets[j].p4.SetPxPyPzE(particles.jetPx()[j], particles.jetPy()[j], particles.jetPz()[j], particles.jetE()[j]);
     writer_.write(event, std::move(jets));
   }
 

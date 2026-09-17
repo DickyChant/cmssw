@@ -1,6 +1,8 @@
 <bin name="testFlashJetCore" file="testFlashJetCore.cc">
+  <use name="alpaka"/>
   <use name="catch2"/>
   <use name="fastjet"/>
+  <use name="fastjet-contrib"/>
   <use name="RecoJets/FlashJet"/>
 </bin>
 

@@ -15,59 +15,86 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     class FlashJetKernel {
     public:
       ALPAKA_FN_ACC void operator()(Acc1D const& acc,
-                                    flashjet::FlashJetSoA::View view,
+                                    flashjet::FlashJetParticleSoA::View particles,
+                                    flashjet::FlashJetEntrySoA::View entries,
                                     double R,
                                     double p,
+                                    FlashJetAlgo::SoftDrop softDrop,
                                     double* fscratch,
                                     int32_t* iscratch) const {
-        // a single work item: the event is clustered by one device thread
-        for ([[maybe_unused]] int32_t item : uniform_elements(acc, 1)) {
-          const int32_t n = view.metadata().size();
-          const ::flashjet::Scratch s{fscratch,
-                                      fscratch + n,
-                                      fscratch + 2 * n,
-                                      fscratch + 3 * n,
-                                      fscratch + 4 * n,
-                                      fscratch + 5 * n,
-                                      fscratch + 6 * n,
-                                      fscratch + 7 * n,
-                                      fscratch + 8 * n,
-                                      iscratch,
-                                      iscratch + n,
-                                      iscratch + 2 * n,
-                                      iscratch + 3 * n,
-                                      iscratch + 4 * n};
-          view.nJets() = ::flashjet::clusterEvent(n,
-                                                  R,
-                                                  p,
-                                                  view.px().data(),
-                                                  view.py().data(),
-                                                  view.pz().data(),
-                                                  view.e().data(),
-                                                  view.histP1().data(),
-                                                  view.histP2().data(),
-                                                  view.histChild().data(),
-                                                  view.histD().data(),
-                                                  view.jetIdx().data(),
-                                                  view.jetPx().data(),
-                                                  view.jetPy().data(),
-                                                  view.jetPz().data(),
-                                                  view.jetE().data(),
-                                                  s);
+        for (int32_t b : uniform_elements(acc, entries.metadata().size())) {
+          const int32_t off = entries.offset()[b];
+          const int32_t n = entries.size()[b];
+          // scratch is laid out like the particles, scaled per particle
+          const auto s = ::flashjet::makeScratch(
+              fscratch + ::flashjet::kFloatScratch * off, iscratch + ::flashjet::kIntScratch * off, n);
+          const int32_t nJets = ::flashjet::clusterEvent(n,
+                                                         R,
+                                                         p,
+                                                         particles.px().data() + off,
+                                                         particles.py().data() + off,
+                                                         particles.pz().data() + off,
+                                                         particles.e().data() + off,
+                                                         particles.histP1().data() + off,
+                                                         particles.histP2().data() + off,
+                                                         particles.histChild().data() + off,
+                                                         particles.histD().data() + off,
+                                                         particles.jetIdx().data() + off,
+                                                         particles.jetPx().data() + off,
+                                                         particles.jetPy().data() + off,
+                                                         particles.jetPz().data() + off,
+                                                         particles.jetE().data() + off,
+                                                         s);
+          entries.nJets()[b] = nJets;
+          ::flashjet::SoftDropResult sd{0., 0., 0., 0., 0., 0., 0};
+          if (softDrop.enable) {
+            sd = ::flashjet::softDrop(n,
+                                      nJets,
+                                      softDrop.zcut,
+                                      softDrop.beta,
+                                      softDrop.R0,
+                                      particles.px().data() + off,
+                                      particles.py().data() + off,
+                                      particles.pz().data() + off,
+                                      particles.e().data() + off,
+                                      particles.histP1().data() + off,
+                                      particles.histP2().data() + off,
+                                      particles.histChild().data() + off,
+                                      particles.jetPx().data() + off,
+                                      particles.jetPy().data() + off,
+                                      s);
+          }
+          entries.groomedPx()[b] = sd.px;
+          entries.groomedPy()[b] = sd.py;
+          entries.groomedPz()[b] = sd.pz;
+          entries.groomedE()[b] = sd.e;
+          entries.zg()[b] = sd.zg;
+          entries.rg()[b] = sd.rg;
+          entries.nDropped()[b] = sd.nDropped;
         }
       }
     };
   }  // namespace
 
   void FlashJetAlgo::cluster(Queue& queue, flashjet::FlashJetDeviceCollection& collection) const {
-    // nJets is expected to be initialised to 0 by the caller
-    const int32_t n = collection->metadata().size();
-    if (n == 0)
+    const int32_t nParticles = collection.view().particles().metadata().size();
+    const int32_t nEntries = collection.view().entries().metadata().size();
+    if (nParticles == 0 || nEntries == 0)
       return;
-    auto fscratch = make_device_buffer<double[]>(queue, 9 * n);
-    auto iscratch = make_device_buffer<int32_t[]>(queue, 6 * n);
-    auto workDiv = make_workdiv<Acc1D>(1, 1);
-    alpaka::exec<Acc1D>(queue, workDiv, FlashJetKernel{}, collection.view(), R_, p_, fscratch.data(), iscratch.data());
+    auto fscratch = make_device_buffer<double[]>(queue, ::flashjet::kFloatScratch * nParticles);
+    auto iscratch = make_device_buffer<int32_t[]>(queue, ::flashjet::kIntScratch * nParticles);
+    const uint32_t items = entriesPerThread_;
+    auto workDiv = make_workdiv<Acc1D>(divide_up_by(nEntries, items), items);
+    alpaka::exec<Acc1D>(queue,
+                        workDiv,
+                        FlashJetKernel{},
+                        collection.view().particles(),
+                        collection.view().entries(),
+                        R_,
+                        p_,
+                        softDrop_,
+                        fscratch.data(),
+                        iscratch.data());
   }
 
 }  // namespace ALPAKA_ACCELERATOR_NAMESPACE

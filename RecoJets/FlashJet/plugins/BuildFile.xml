@@ -1,28 +1,38 @@
-<library file="FlashJetRecoJetProducer.cc FlashJetCompareAnalyzer.cc" name="RecoJetsFlashJetPlugins">
+<library file="FlashJetRecoJetProducer.cc FlashJetCompareAnalyzer.cc FlashJetSoftDropProducer.cc FlashJetValueMapCompareAnalyzer.cc FastjetSoftDropProducer.cc FlashJetRandomCandidateProducer.cc" name="RecoJetsFlashJetPlugins">
+  <use name="fastjet"/>
+  <use name="fastjet-contrib"/>
   <use name="DataFormats/Candidate"/>
+  <use name="DataFormats/Common"/>
   <use name="DataFormats/FlashJet"/>
   <use name="DataFormats/JetReco"/>
   <use name="FWCore/Framework"/>
   <use name="FWCore/MessageLogger"/>
   <use name="FWCore/ParameterSet"/>
+  <use name="FWCore/Utilities"/>
   <use name="RecoJets/FlashJet"/>
+  <use name="RecoJets/JetProducers"/>
   <flags EDM_PLUGIN="1"/>
 </library>
 
 <library file="FlashJetSonicProducer.cc" name="RecoJetsFlashJetSonicPlugins">
   <use name="DataFormats/Candidate"/>
+  <use name="DataFormats/Common"/>
   <use name="DataFormats/JetReco"/>
   <use name="FWCore/Framework"/>
   <use name="FWCore/ParameterSet"/>
+  <use name="FWCore/Utilities"/>
   <use name="HeterogeneousCore/SonicTriton"/>
   <use name="RecoJets/FlashJet"/>
+  <use name="RecoJets/JetProducers"/>
   <flags EDM_PLUGIN="1"/>
 </library>
 
 <library file="alpaka/*.cc" name="RecoJetsFlashJetPluginsPortable">
   <use name="alpaka"/>
   <use name="DataFormats/Candidate"/>
+  <use name="DataFormats/Common"/>
   <use name="DataFormats/FlashJet"/>
+  <use name="DataFormats/JetReco"/>
   <use name="DataFormats/Portable"/>
   <use name="FWCore/Framework"/>
   <use name="FWCore/ParameterSet"/>
