@@ -11,8 +11,8 @@ output                = logs/$(name).$(ClusterId).out
 error                 = logs/$(name).$(ClusterId).err
 
 request_gpus          = 1
-request_cpus          = 16
-request_memory        = 32 GB
+request_cpus          = 4
+request_memory        = 16 GB
 request_disk          = 20 GB
 MY.WantOS             = "el9"
 +MaxRuntime           = 14400

@@ -210,13 +210,15 @@ case $TASK in
   sonic-multi)
     SOURCE=$1
     # the CPU baseline on this node: the same cores, FastJet, no server
-    concurrent fastjet_c8 8 2 4000 --impl fastjet
+    concurrent fastjet_c4 4 1 4000 --impl fastjet
+    # more clients than cores is deliberate: an Async client spends most of its
+    # time waiting for the server, so this is how a batch actually forms
     for instances in 1 2 4; do
       export SERVER_INSTANCES=$instances
       start_server || exit 1
       batch_stats "instances=$instances before"
-      for clients in 1 2 4 8; do
-        concurrent "sonic_i${instances}_c${clients}" "$clients" 2 2000 --impl sonic \
+      for clients in 1 2 4 8 16; do
+        concurrent "sonic_i${instances}_c${clients}" "$clients" 1 1500 --impl sonic \
           --address 127.0.0.1 --port 8001 --noShm --mode Async
         batch_stats "instances=$instances clients=$clients"
       done
