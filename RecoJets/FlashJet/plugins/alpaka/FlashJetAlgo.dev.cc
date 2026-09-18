@@ -1,3 +1,5 @@
+#include <cstdio>
+
 #include <alpaka/alpaka.hpp>
 
 #include "HeterogeneousCore/AlpakaInterface/interface/config.h"
@@ -8,6 +10,8 @@
 
 #include "FlashJetAlgo.h"
 
+//#define GPU_DEBUG
+
 namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
   using namespace cms::alpakatools;
@@ -16,13 +20,19 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
     // threads cooperating on one entry in the block-parallel kernel
     constexpr uint32_t kBlockThreads = 256;
+    constexpr uint32_t kMinWarpSize = 32;
+    constexpr uint32_t kMaxWarps = kBlockThreads / kMinWarpSize;
 
-    ALPAKA_FN_ACC inline ::flashjet::Scratch entryScratch(double* fscratch, int32_t* iscratch, int32_t off, int32_t n) {
+    ALPAKA_FN_ACC ALPAKA_FN_INLINE bool better(double a, int32_t ai, double b, int32_t bi) {
+      return bi >= 0 && (ai < 0 || b < a || (b == a && bi < ai));
+    }
+
+    ALPAKA_FN_ACC ALPAKA_FN_INLINE ::flashjet::Scratch entryScratch(double* fscratch, int32_t* iscratch, int32_t off, int32_t n) {
       return ::flashjet::makeScratch(
           fscratch + ::flashjet::kFloatScratch * off, iscratch + ::flashjet::kIntScratch * off, n);
     }
 
-    ALPAKA_FN_ACC inline void writeSoftDrop(flashjet::FlashJetEntrySoA::View entries,
+    ALPAKA_FN_ACC ALPAKA_FN_INLINE void writeSoftDrop(flashjet::FlashJetEntrySoA::View entries,
                                             int32_t b,
                                             ::flashjet::SoftDropResult const& sd) {
       entries.groomedPx()[b] = sd.px;
@@ -118,7 +128,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         using namespace ::flashjet::detail;
 
         // block-wide reduction buffers and the state the threads share
-        constexpr uint32_t kMaxWarps = kBlockThreads / 32;
         auto& redDist = alpaka::declareSharedVar<double[kMaxWarps], __COUNTER__>(acc);
         auto& redIdx = alpaka::declareSharedVar<int32_t[kMaxWarps], __COUNTER__>(acc);
         auto& selDist = alpaka::declareSharedVar<double, __COUNTER__>(acc);
@@ -132,16 +141,25 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         const int32_t nEntries = entries.metadata().size();
         const uint32_t tid = alpaka::getIdx<alpaka::Block, alpaka::Threads>(acc)[0u];
         const uint32_t threads = alpaka::getWorkDiv<alpaka::Block, alpaka::Threads>(acc)[0u];
-        const uint32_t blocks = alpaka::getWorkDiv<alpaka::Grid, alpaka::Blocks>(acc)[0u];
         const uint32_t warpSize = alpaka::warp::getSize(acc);
         const uint32_t warp = tid / warpSize;
         const uint32_t lane = tid % warpSize;
-        const uint32_t nWarps = (threads + warpSize - 1) / warpSize;
+        const uint32_t nWarps = divide_up_by(threads, warpSize);
         const int32_t shflWidth = static_cast<int32_t>((threads < warpSize) ? threads : warpSize);
+        ALPAKA_ASSERT_ACC(nWarps <= kMaxWarps);
 
-        for (int32_t b = alpaka::getIdx<alpaka::Grid, alpaka::Blocks>(acc)[0u]; b < nEntries; b += blocks) {
+        // one entry per block; all the threads of a block see the same
+        // iterations, which is what makes the syncBlockThreads below legal
+        for (uint32_t entry : independent_groups(acc, nEntries)) {
+          const int32_t b = static_cast<int32_t>(entry);
           const int32_t off = entries.offset()[b];
           const int32_t n = entries.size()[b];
+          ALPAKA_ASSERT_ACC(off >= 0);
+          ALPAKA_ASSERT_ACC(off + n <= particles.metadata().size());
+#ifdef GPU_DEBUG
+          if (once_per_block(acc))
+            printf("clustering entry %d: %d particles at offset %d, %u threads\n", b, n, off, threads);
+#endif
           const auto s = entryScratch(fscratch, iscratch, off, n);
           double const* inPx = particles.px().data() + off;
           double const* inPy = particles.py().data() + off;
@@ -158,7 +176,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
           const double invR2 = 1. / (R * R);
 
           if (n <= 0) {
-            if (tid == 0) {
+            if (once_per_block(acc)) {
               entries.nJets()[b] = 0;
               writeSoftDrop(entries, b, ::flashjet::SoftDropResult{0., 0., 0., 0., 0., 0., 0});
             }
@@ -197,9 +215,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
           // slot.  The per-warp part uses shuffles, so the whole reduction
           // costs two block synchronisations instead of one per tree level --
           // with a merge step per particle, that overhead was dominating.
-          auto better = [](double a, int32_t ai, double b, int32_t bi) {
-            return bi >= 0 && (ai < 0 || b < a || (b == a && bi < ai));
-          };
           auto reduceMin = [&](double value, int32_t index) {
             // a block can hold fewer threads than the hardware wave (ROCm waves
             // are 64 wide): shuffle only across the lanes that exist
@@ -216,7 +231,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
               redIdx[warp] = index;
             }
             alpaka::syncBlockThreads(acc);
-            if (tid == 0) {
+            if (once_per_block(acc)) {
               for (uint32_t w = 1; w < nWarps; ++w) {
                 if (better(redDist[0], redIdx[0], redDist[w], redIdx[w])) {
                   redDist[0] = redDist[w];
@@ -245,7 +260,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
           for (int32_t k = tid; k < n; k += threads)
             rescan(k);
-          if (tid == 0) {
+          if (once_per_block(acc)) {
             nextId = n;
             nJets = 0;
           }
@@ -264,8 +279,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             reduceMin(bestCand, bestSlot);
 
             // the merge itself: bookkeeping on a single thread
-            if (tid == 0) {
+            if (once_per_block(acc)) {
+              // a live slot always has a finite candidate (its beam distance),
+              // and this loop runs once per slot, so the argmin always selects
               const int32_t i = selIdx;
+              ALPAKA_ASSERT_ACC(i >= 0 && i < n);
               iSel = i;
               isPair = 0;
               jSel = i;
@@ -313,6 +331,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
               break;  // unreachable while any slot is live
             const int32_t j = jSel;
             const bool pair = isPair != 0;
+            ALPAKA_ASSERT_ACC(not pair or (j >= 0 and j < n));
 
             // one sweep over the entry: the new pseudojet's nearest neighbour,
             // the rows that improved towards it, and the rows it invalidated
@@ -340,7 +359,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             // removed its slot, so there is nothing to reduce
             if (pair)
               reduceMin(bestD, bestJ);
-            if (tid == 0 && pair) {
+            if (once_per_block(acc) && pair) {
               const int32_t bj = selIdx;
               const double best = (bj >= 0) ? selDist : kInf;
               s.nnd[i] = best;
@@ -359,7 +378,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
           }
 
           // particle -> jet and the optional soft drop: O(n) walks over the history
-          if (tid == 0) {
+          if (once_per_block(acc)) {
+            ALPAKA_ASSERT_ACC(nJets > 0 and nJets <= n);
             int32_t jet = nJets;
             for (int32_t step = n - 1; step >= 0; --step) {
               if (histP2[step] < 0) {
@@ -371,6 +391,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
               }
             }
             entries.nJets()[b] = nJets;
+#ifdef GPU_DEBUG
+            printf("entry %d: %d particles -> %d jets\n", b, n, nJets);
+#endif
             ::flashjet::SoftDropResult sd{0., 0., 0., 0., 0., 0., 0};
             if (softDrop.enable)
               sd = ::flashjet::softDrop(n,
