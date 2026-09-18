@@ -1,3 +1,5 @@
+#include <cstdio>
+
 #include <alpaka/alpaka.hpp>
 
 #include "HeterogeneousCore/AlpakaInterface/interface/config.h"
@@ -154,6 +156,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
           const int32_t n = entries.size()[b];
           ALPAKA_ASSERT_ACC(off >= 0);
           ALPAKA_ASSERT_ACC(off + n <= particles.metadata().size());
+#ifdef GPU_DEBUG
+          if (once_per_block(acc))
+            printf("clustering entry %d: %d particles at offset %d, %u threads\n", b, n, off, threads);
+#endif
           const auto s = entryScratch(fscratch, iscratch, off, n);
           double const* inPx = particles.px().data() + off;
           double const* inPy = particles.py().data() + off;
@@ -385,6 +391,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
               }
             }
             entries.nJets()[b] = nJets;
+#ifdef GPU_DEBUG
+            printf("entry %d: %d particles -> %d jets\n", b, n, nJets);
+#endif
             ::flashjet::SoftDropResult sd{0., 0., 0., 0., 0., 0., 0};
             if (softDrop.enable)
               sd = ::flashjet::softDrop(n,
