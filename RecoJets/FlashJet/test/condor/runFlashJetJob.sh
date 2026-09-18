@@ -8,6 +8,9 @@
 #   runFlashJetJob.sh CLUSTER NAME sonic-validate
 #   runFlashJetJob.sh CLUSTER NAME sonic-bench NSOFT THREADS EVENTS [STREAMS]
 #   runFlashJetJob.sh CLUSTER NAME sonic-scan SOURCE
+#   runFlashJetJob.sh CLUSTER NAME sonic-multi SOURCE
+#       many clients, one server: aggregate throughput and the batch sizes the
+#       server actually forms, against a FastJet baseline on the same node
 #       throughput on this node: FastJet (4 threads), SONIC GPU server at 1/4/16 streams
 # Outputs go to results/CLUSTER/NAME/ (transferred back to the EOS job directory).
 CLUSTER=$1 NAME=$2 TASK=$3
@@ -45,11 +48,48 @@ gen() {
     --fileout file:gen.root --python_filename gen_cfg.py --nThreads 4
 }
 
+# mean batch size the server formed, from its own counters
+batch_stats() {  # batch_stats LABEL
+  local metrics
+  metrics=$(curl -sf localhost:8002/metrics || echo "")
+  local count exec_count
+  count=$(echo "$metrics" | awk '/^nv_inference_count/ {c=$2} END {print c+0}')
+  exec_count=$(echo "$metrics" | awk '/^nv_inference_exec_count/ {c=$2} END {print c+0}')
+  echo "BATCHSTATS $1 inferences=$count executions=$exec_count mean_batch=$(awk -v a="$count" -v b="$exec_count" 'BEGIN {print (b > 0) ? a / b : 0}')"
+}
+
+# run CLIENTS copies of one cmsRun configuration at the same time
+concurrent() {  # concurrent TAG CLIENTS THREADS EVENTS [extra cmsRun args]
+  local tag=$1 clients=$2 threads=$3 events=$4
+  shift 4
+  local start end pids=()
+  start=$(date +%s.%N)
+  for c in $(seq 1 "$clients"); do
+    cmsRun "$CFG/benchmarkFlashJet_cfg.py" --input scouting --inputFiles "file:$TOP/scouting_run2026d.root" \
+      --workflow ak4 --threads "$threads" --streams "$threads" --maxEvents "$events" \
+      --json "$OUT/${tag}_client${c}.json" "$@" > "$OUT/${tag}_client${c}.log" 2>&1 &
+    pids+=($!)
+  done
+  local failed=0
+  for pid in "${pids[@]}"; do
+    wait "$pid" || failed=$((failed + 1))
+  done
+  end=$(date +%s.%N)
+  local wall total
+  wall=$(awk -v a="$start" -v b="$end" 'BEGIN {print b - a}')
+  total=$((clients * events))
+  echo "AGGREGATE $tag clients=$clients threads=$threads events_per_client=$events failed=$failed" \
+    "wall=${wall}s throughput=$(awk -v t="$total" -v w="$wall" 'BEGIN {printf "%.1f", t / w}') ev/s"
+  [ "$failed" -eq 0 ] || STATUS=1
+}
+
 start_server() {  # start a GPU Triton server with the flashjet model in the background
   mkdir -p models flashjet triton_cache
   tar -xzf flashjet.tar.gz -C flashjet
   tar -xzf flashjet_pyenv.tar.gz
   cp -r "$CMSSW_BASE/src/RecoJets/FlashJet/data/models/flashjet" models/
+  # instance_group count: how many python backend processes serve the model
+  sed -i "s/^    count: 1$/    count: ${SERVER_INSTANCES:-1}/" models/flashjet/config.pbtxt
   rm -f models/flashjet/1/flashjet_src
   ln -s "$TOP/flashjet/src" models/flashjet/1/flashjet_src
   sed -i 's/string_value: "auto"/string_value: "gpu"/' models/flashjet/config.pbtxt
@@ -166,6 +206,25 @@ case $TASK in
     start_server || exit 1
     bench "$NAME" ak4 sonic sonic "$1" "$2" "$3" "${4:-$2}" --address 127.0.0.1 --port 8001 --noShm
     grep "flashjet model" "$OUT/tritonserver.log"
+    ;;
+  sonic-multi)
+    SOURCE=$1
+    # the CPU baseline on this node: the same cores, FastJet, no server
+    concurrent fastjet_c8 8 2 4000 --impl fastjet
+    for instances in 1 2 4; do
+      export SERVER_INSTANCES=$instances
+      start_server || exit 1
+      batch_stats "instances=$instances before"
+      for clients in 1 2 4 8; do
+        concurrent "sonic_i${instances}_c${clients}" "$clients" 2 2000 --impl sonic \
+          --address 127.0.0.1 --port 8001 --noShm --mode Async
+        batch_stats "instances=$instances clients=$clients"
+      done
+      kill $SERVER_PID 2>/dev/null
+      wait $SERVER_PID 2>/dev/null
+      SERVER_PID=
+      sleep 5
+    done
     ;;
   sonic-scan)
     SOURCE=$1
