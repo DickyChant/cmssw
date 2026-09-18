@@ -18,13 +18,19 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
     // threads cooperating on one entry in the block-parallel kernel
     constexpr uint32_t kBlockThreads = 256;
+    constexpr uint32_t kMinWarpSize = 32;
+    constexpr uint32_t kMaxWarps = kBlockThreads / kMinWarpSize;
 
-    ALPAKA_FN_ACC inline ::flashjet::Scratch entryScratch(double* fscratch, int32_t* iscratch, int32_t off, int32_t n) {
+    ALPAKA_FN_ACC ALPAKA_FN_INLINE bool better(double a, int32_t ai, double b, int32_t bi) {
+      return bi >= 0 && (ai < 0 || b < a || (b == a && bi < ai));
+    }
+
+    ALPAKA_FN_ACC ALPAKA_FN_INLINE ::flashjet::Scratch entryScratch(double* fscratch, int32_t* iscratch, int32_t off, int32_t n) {
       return ::flashjet::makeScratch(
           fscratch + ::flashjet::kFloatScratch * off, iscratch + ::flashjet::kIntScratch * off, n);
     }
 
-    ALPAKA_FN_ACC inline void writeSoftDrop(flashjet::FlashJetEntrySoA::View entries,
+    ALPAKA_FN_ACC ALPAKA_FN_INLINE void writeSoftDrop(flashjet::FlashJetEntrySoA::View entries,
                                             int32_t b,
                                             ::flashjet::SoftDropResult const& sd) {
       entries.groomedPx()[b] = sd.px;
@@ -120,7 +126,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         using namespace ::flashjet::detail;
 
         // block-wide reduction buffers and the state the threads share
-        constexpr uint32_t kMaxWarps = kBlockThreads / 32;
         auto& redDist = alpaka::declareSharedVar<double[kMaxWarps], __COUNTER__>(acc);
         auto& redIdx = alpaka::declareSharedVar<int32_t[kMaxWarps], __COUNTER__>(acc);
         auto& selDist = alpaka::declareSharedVar<double, __COUNTER__>(acc);
@@ -137,7 +142,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         const uint32_t warpSize = alpaka::warp::getSize(acc);
         const uint32_t warp = tid / warpSize;
         const uint32_t lane = tid % warpSize;
-        const uint32_t nWarps = (threads + warpSize - 1) / warpSize;
+        const uint32_t nWarps = divide_up_by(threads, warpSize);
         const int32_t shflWidth = static_cast<int32_t>((threads < warpSize) ? threads : warpSize);
         ALPAKA_ASSERT_ACC(nWarps <= kMaxWarps);
 
@@ -204,9 +209,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
           // slot.  The per-warp part uses shuffles, so the whole reduction
           // costs two block synchronisations instead of one per tree level --
           // with a merge step per particle, that overhead was dominating.
-          auto better = [](double a, int32_t ai, double b, int32_t bi) {
-            return bi >= 0 && (ai < 0 || b < a || (b == a && bi < ai));
-          };
           auto reduceMin = [&](double value, int32_t index) {
             // a block can hold fewer threads than the hardware wave (ROCm waves
             // are 64 wide): shuffle only across the lanes that exist
