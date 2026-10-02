@@ -1,5 +1,7 @@
 <use name="DataFormats/DetId"/>
 <use name="DataFormats/EcalDetId"/>
+<use name="DataFormats/ForwardDetId"/>
+<use name="Geometry/HGCalCommonData"/>
 <use name="DataFormats/GeometryVector"/>
 <use name="DataFormats/Math"/>
 <use name="FWCore/MessageLogger"/>
