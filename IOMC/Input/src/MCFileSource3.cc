@@ -86,7 +86,9 @@ namespace edm {
   //-------------------------------------------------------------------------
   void MCFileSource3::fillDescriptions(ConfigurationDescriptions& descriptions) {
     ParameterSetDescription desc;
-    desc.setComment("A source which reads HepMC3 files.");
+    desc.setComment(
+        "A source which reads HepMC3 files: HepMC3 or HepMC2 ASCII, LHEF, HEPEVT, or HepMC3 ROOT (also from a remote "
+        "URL).");
     ProducerSourceBase::fillDescription(desc);
     InputFileCatalog::fillDescription(desc);
     desc.addUntracked<bool>("printEvent", false)->setComment("Print the content of every event which is read.");

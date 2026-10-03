@@ -5,7 +5,9 @@
  *
  *  Sequential reader of HepMC3 event files. The concrete format is deduced
  *  from the file itself, so the ASCII HepMC3 format, the ASCII HepMC2 format,
- *  LHEF and HEPEVT are all accepted, as well as their compressed flavours.
+ *  LHEF and HEPEVT are all accepted, as well as their compressed flavours, and
+ *  the HepMC3 ROOT format (ReaderRootTree), which is read event by event, also
+ *  from a remote URL such as root://.
  *  A list of files can be given, in which case they are read one after the
  *  other as a single stream of events.
  */

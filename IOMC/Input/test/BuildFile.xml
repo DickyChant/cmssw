@@ -1,1 +1,4 @@
+<bin file="writeHepMC3Root.cpp" name="writeHepMC3Root">
+  <use name="hepmc3-rootio"/>
+</bin>
 <test name="TestIOMCInputMCFileSource3" command="testReader3.sh"/>
