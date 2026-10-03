@@ -150,7 +150,7 @@ def OptionsFromItems(items):
         else:
             options.filetype="EDM"
 
-    filesuffix = {"LHE": "lhe", "EDM": "root", "MCDB": "", "DQM":"root", "EDM_RNTUPLE":"rntpl"}[options.filetype]
+    filesuffix = {"LHE": "lhe", "HEPMC3": "hepmc3", "EDM": "root", "MCDB": "", "DQM":"root", "EDM_RNTUPLE":"rntpl"}[options.filetype]
 
     if options.filein=="" and not (first_step in ("ALL","GEN","LHE","SIM_CHAIN")):
         options.dirin="file:"+options.dirin.replace('file:','')

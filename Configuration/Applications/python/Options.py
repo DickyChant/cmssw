@@ -63,7 +63,7 @@ parser.add_argument("--filetype",
                     default=defaultOptions.filetype,
                     type=str,
                     dest="filetype",
-                    choices=['EDM','DAT','LHE','MDCB','DQM','DQMDAQ', 'EDM_RNTUPLE']
+                    choices=['EDM','DAT','LHE','HEPMC3','MDCB','DQM','DQMDAQ', 'EDM_RNTUPLE']
                   )
 
 parser.add_argument("-n", "--number",

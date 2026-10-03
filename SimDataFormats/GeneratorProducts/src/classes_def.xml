@@ -164,6 +164,14 @@
 	</class>
 	<class name="edm::Wrapper&lt;GenEventInfoProduct3&gt;"/>
 
+	<class name="GenRunInfoProduct3" ClassVersion="3">
+		<version ClassVersion="3" checksum="165818637"/>
+	</class>
+	<class name="HepMC3::GenRunInfoData" ClassVersion="3">
+		<version ClassVersion="3" checksum="3468313540"/>
+	</class>
+	<class name="edm::Wrapper&lt;GenRunInfoProduct3&gt;"/>
+
 	<!-- LHE products -->
 
 	<class name="lhef::HEPEUP::FiveVector" ClassVersion="3">

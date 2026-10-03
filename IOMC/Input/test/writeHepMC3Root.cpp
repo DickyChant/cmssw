@@ -34,9 +34,8 @@ int main(int argc, char** argv) {
     if (!reader->read_event(evt) || reader->failed()) {
       break;
     }
-    if (n == 0) {
-      writer.set_run_info(evt.run_info());
-    }
+    // write_event stores the run information of the event; setting it on the writer
+    // beforehand would make it skip that
     writer.write_event(evt);
     ++n;
   }

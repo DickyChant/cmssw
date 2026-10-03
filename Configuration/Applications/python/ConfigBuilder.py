@@ -492,6 +492,11 @@ class ConfigBuilder(object):
                 else:
                     filesFromOption(self)
 
+            elif self._options.filetype == "HEPMC3":
+                # HepMC3 or HepMC2 ASCII, LHEF, HEPEVT or HepMC3 ROOT files
+                self.process.source=cms.Source("MCFileSource3", fileNames = cms.untracked.vstring())
+                filesFromOption(self)
+
             elif self._options.filetype == "DQM":
                 self.process.source=cms.Source("DQMRootSource",
                                                fileNames = cms.untracked.vstring())
@@ -513,13 +518,13 @@ class ConfigBuilder(object):
                 self.process.source.processingMode = cms.untracked.string("RunsAndLumis")
 
         ##drop LHEXMLStringProduct on input to save memory if appropriate
-        if 'GEN' in self.stepMap.keys() and not self._options.filetype == "LHE":
+        if 'GEN' in self.stepMap.keys() and not self._options.filetype in ("LHE", "HEPMC3"):
             if self._options.inputCommands:
                 self._options.inputCommands+=',drop LHEXMLStringProduct_*_*_*,'
             else:
                 self._options.inputCommands='keep *, drop LHEXMLStringProduct_*_*_*,'
 
-        if self.process.source and self._options.inputCommands and not self._options.filetype == "LHE":
+        if self.process.source and self._options.inputCommands and not self._options.filetype in ("LHE", "HEPMC3"):
             if not hasattr(self.process.source,'inputCommands'): self.process.source.inputCommands=cms.untracked.vstring()
             for command in self._options.inputCommands.split(','):
                 # remove whitespace around the keep/drop statements

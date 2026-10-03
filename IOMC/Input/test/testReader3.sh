@@ -60,3 +60,43 @@ function content { awk '/EVENT CONTENT/{p=1} /^%MSG$/{p=0} p && !/^Begin process
   || die "printEvent printed no event content for the HepMC3 ROOT input" 1
 diff <(content testReader3_ascii.log) <(content testReader3_root.log) > /dev/null \
   || die "HepMC3 ROOT and ASCII inputs give different event content" $?
+
+# the run information of the input (weight names, tools) is put in the run, also through
+# the HepMC3 ROOT format
+sed '2a W nominal\nT Pythia8\\|8.240\\|test tool' ${hepmc3#file:} > testReader3_named.hepmc3
+writeHepMC3Root testReader3_named.hepmc3 testReader3_named.hepmc3.root 10 \
+  || die "writeHepMC3Root, input with run information" $?
+
+for input in testReader3_named.hepmc3 testReader3_named.hepmc3.root ; do
+  cmsRun ${SCRAM_TEST_PATH}/testReader3_cfg.py \
+    --inputFiles file:${input} --maxEvents 10 --outputFile testReader3_runinfo.root \
+    || die "cmsRun testReader3_cfg.py, ${input}" $?
+  python3 ${SCRAM_TEST_PATH}/checkGenRunInfo3.py testReader3_runinfo.root --weightNames nominal --tools Pythia8 \
+    || die "GenRunInfoProduct3 from ${input}" $?
+done
+
+# files with different weight names cannot be read together
+cmsRun ${SCRAM_TEST_PATH}/testReader3_cfg.py \
+  --inputFiles file:testReader3.hepmc3.root file:testReader3_named.hepmc3.root \
+  --outputFile testReader3_mixed.root > testReader3_mixed.log 2>&1 \
+  && die "cmsRun testReader3_cfg.py did not fail on files with different weight names" 1
+grep -q "different names" testReader3_mixed.log \
+  || die "cmsRun testReader3_cfg.py failed, but not on the weight names" 1
+
+# skipEvents
+cmsRun ${SCRAM_TEST_PATH}/testReader3_cfg.py \
+  --inputFiles ${hepmc3} --skipEvents 45 --outputFile testReader3_skip.root \
+  || die "cmsRun testReader3_cfg.py, skipEvents" $?
+
+edmFileUtil -f file:testReader3_skip.root | grep -q " 5 events" \
+  || die "testReader3_skip.root does not hold the 5 expected events" $?
+
+# cmsDriver --filetype HEPMC3 reads the input with MCFileSource3
+cmsDriver.py hepmc3 -s NONE --conditions auto:phase1_2025_realistic --filetype HEPMC3 \
+  --filein file:testReader3_named.hepmc3.root --fileout file:testReader3_driver.root \
+  --eventcontent RAWSIM --datatier GEN -n -1 --no_exec --python_filename testReader3_driver_cfg.py \
+  || die "cmsDriver.py --filetype HEPMC3" $?
+grep -q 'cms.Source("MCFileSource3"' testReader3_driver_cfg.py \
+  || die "cmsDriver.py --filetype HEPMC3 does not use MCFileSource3" 1
+cmsRun testReader3_driver_cfg.py \
+  || die "cmsRun testReader3_driver_cfg.py" $?

@@ -10,6 +10,7 @@ parser.add_argument("--inputFiles", type=str, nargs='+',
                     help="HepMC3 or HepMC2 files to read")
 parser.add_argument("--outputFile", type=str, default="HepMC3_GEN.root", help="Name of the output file")
 parser.add_argument("--maxEvents", type=int, default=-1, help="Number of events to read (-1 for all)")
+parser.add_argument("--skipEvents", type=int, default=0, help="Number of events to skip at the start of the input")
 parser.add_argument("--printEvent", action="store_true", help="Print the content of every event which is read.")
 args = parser.parse_args()
 
@@ -17,6 +18,7 @@ process = cms.Process("GEN")
 
 process.source = cms.Source("MCFileSource3",
 	fileNames = cms.untracked.vstring(args.inputFiles),
+	skipEvents = cms.untracked.uint32(args.skipEvents),
 	printEvent = cms.untracked.bool(args.printEvent)
 )
 
