@@ -565,7 +565,38 @@ def enableCHSUParT(process):
     return process
 
 
-def HINPACustomNanoAOD(process):
+def updateEgammaTo106X(process):
+    """Update e/gamma objects of pre-10_6 reco to the 10_6 data format, as the Run-2
+    legacy nano did (slimmed*To106X, dropped from central nano since). Needed for MiniAOD
+    made in 10_6 from 80X AOD, whose electrons e.g. carry conversion vtxFitProb = FLT_MAX.
+    The updated collections replace slimmedElectrons / slimmedPhotons in this process;
+    the inputs of the updater and its helper value maps are the input-file collections."""
+    from RecoEgamma.EgammaTools.egammaObjectModificationsInMiniAOD_cff import egamma9X105XUpdateModifier
+    from RecoEgamma.ElectronIdentification.heepIdVarValueMapProducer_cfi import heepIDVarValueMaps
+    from RecoEgamma.EgammaIsolationAlgos.egmPhotonIsolationMiniAOD_cff import egmPhotonIsolation
+    from RecoEgamma.PhotonIdentification.photonIDValueMapProducer_cff import photonIDValueMapProducer
+    _skip = cms.InputTag.skipCurrentProcess()
+    process.heepIDVarValueMaps = heepIDVarValueMaps.clone(
+        dataFormat=2, elesMiniAOD=cms.InputTag("slimmedElectrons", processName=_skip))
+    process.egmPhotonIsolation = egmPhotonIsolation.clone(
+        srcToIsolate=cms.InputTag("slimmedPhotons", processName=_skip))
+    process.photonIDValueMapProducer = photonIDValueMapProducer.clone()  # already reads the input slimmedPhotons
+    process.slimmedElectrons = cms.EDProducer("ModifiedElectronProducer",
+        src=cms.InputTag("slimmedElectrons", processName=_skip),
+        modifierConfig=cms.PSet(modifications=cms.VPSet(egamma9X105XUpdateModifier.clone(
+            phoPhotonIso="", phoNeutralHadIso="", phoChargedHadIso="",
+            phoChargedHadWorstVtxIso="", phoChargedHadWorstVtxConeVetoIso="", phoChargedHadPFPVIso=""))))
+    process.slimmedPhotons = cms.EDProducer("ModifiedPhotonProducer",
+        src=cms.InputTag("slimmedPhotons", processName=_skip),
+        modifierConfig=cms.PSet(modifications=cms.VPSet(egamma9X105XUpdateModifier.clone())))
+    process.egammaTo106XTask = cms.Task(process.heepIDVarValueMaps, process.egmPhotonIsolation,
+                                        process.photonIDValueMapProducer,
+                                        process.slimmedElectrons, process.slimmedPhotons)
+    _associate(process, process.egammaTo106XTask)
+    return process
+
+
+def HINPPBCustomNanoAOD(process):
     """Run-2 pPb (2016, 8.16 TeV) on pp-reco MiniAOD, e.g. 10_6 MiniAOD made from the
     80X PromptReco AOD with run2_miniAOD_80XLegacy. Run with the UL nano era of the
     input year, e.g. --era Run2_2016_pA,run2_nanoAOD_106Xv2.
@@ -573,7 +604,9 @@ def HINPACustomNanoAOD(process):
     Same PF/track, muon and e/gamma HIN content as HINHAD, but the pp-reco objects:
     event activity from pACentrality (no centrality bin), the Run-2 ZDC rechits
     (zdcreco) from the input instead of the Run-3 on-the-fly reconstruction, and UParT
-    on the standard AK4 CHS jets (enableCHSUParT) instead of the akCs HI jets."""
+    on the standard AK4 CHS jets (enableCHSUParT) instead of the akCs HI jets.
+    The pre-10_6 e/gamma objects are updated to the 10_6 format (updateEgammaTo106X)."""
+    updateEgammaTo106X(process)
     addHIPFCands(process)
     addHITracks(process)
     addHIMuons(process)
@@ -587,6 +620,11 @@ def HINPACustomNanoAOD(process):
     process.zdcTable = zdcTable.clone(src=cms.InputTag("zdcreco"))
     process.zdcTableTask = cms.Task(process.zdcTable)
     _associate(process, process.zdcTableTask)
+    # no low-pT electrons in 80X reco (and not needed for pPb): skip the whole chain, the
+    # cross-linker gets an always-empty collection, and the LowPtElectron table is dropped
+    process.finalLowPtElectrons = cms.EDFilter("PATElectronRefSelector",
+        src=cms.InputTag("slimmedElectrons"), cut=cms.string("pt < 0"))
+    _removeNanoModules(process, ["lowPtElectronTable", "lowPtElectronMCTable"])
     # no PPS in the 2016 pPb MiniAOD (no ctppsProtons)
     _removeNanoModules(process, ["protonTable", "multiRPTable", "singleRPTable"])
     return process
