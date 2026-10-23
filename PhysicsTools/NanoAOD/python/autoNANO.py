@@ -123,6 +123,9 @@ autoNANO = {
     # with UParT-regressed pT >= 25 GeV; see custom_hin_cff.addFullHadSkim)
     'HINHADSKIM': {'sequence': '@PHYS',
                    'customize': '@PHYS+PhysicsTools/NanoAOD/custom_hin_cff.HINHADCustomNanoAOD+PhysicsTools/NanoAOD/custom_hin_cff.addFullHadSkim'},
+    # HINPA: Run-2 pPb on pp-reco MiniAOD (pACentrality, Run-2 ZDC rechits, UParT on AK4 CHS)
+    'HINPA': {'sequence': '@PHYS',
+              'customize': 'PhysicsTools/NanoAOD/custom_hin_cff.enableCHSUParT+@PHYS+PhysicsTools/NanoAOD/custom_hin_cff.HINPACustomNanoAOD'},
     # NANOGEN (from LHE/GEN/AOD)
     'GEN': {'sequence': 'PhysicsTools/NanoAOD/nanogen_cff.nanogenSequence',
             'customize': 'PhysicsTools/NanoAOD/nanogen_cff.customizeNanoGEN'},

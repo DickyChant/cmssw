@@ -551,6 +551,47 @@ def HINHADCustomNanoAOD(process):
     return process
 
 
+def enableCHSUParT(process):
+    """Run the central AK4 UParT on the standard (CHS) Jet collection.
+
+    Run-2 pPb was reconstructed with the pp reconstruction, so the standard
+    slimmedJets (AK4 CHS) are the analysis jets. The Run-2 UL nano only reruns
+    ParticleNet on them; switching UParT on as well fills the btagUParTAK4* /
+    UParTAK4Reg* columns of the Jet table (-1 otherwise). The CHS jet update can
+    only be done once (it feeds the taus), so this has to run BEFORE
+    nanoAOD_customizeCommon: it is listed ahead of @PHYS in autoNANO."""
+    from PhysicsTools.NanoAOD.jetsAK4_CHS_cff import nanoAOD_addDeepInfoAK4CHS_switch
+    nanoAOD_addDeepInfoAK4CHS_switch.nanoAOD_addUnifiedParTAK4Tag_switch = True
+    return process
+
+
+def HINPACustomNanoAOD(process):
+    """Run-2 pPb (2016, 8.16 TeV) on pp-reco MiniAOD, e.g. 10_6 MiniAOD made from the
+    80X PromptReco AOD with run2_miniAOD_80XLegacy. Run with the UL nano era of the
+    input year, e.g. --era Run2_2016_pA,run2_nanoAOD_106Xv2.
+
+    Same PF/track, muon and e/gamma HIN content as HINHAD, but the pp-reco objects:
+    event activity from pACentrality (no centrality bin), the Run-2 ZDC rechits
+    (zdcreco) from the input instead of the Run-3 on-the-fly reconstruction, and UParT
+    on the standard AK4 CHS jets (enableCHSUParT) instead of the akCs HI jets."""
+    addHIPFCands(process)
+    addHITracks(process)
+    addHIMuons(process)
+    addHIEGM(process)
+    process.centralityTable = hfTable.clone(
+        src=cms.InputTag("pACentrality"),
+        doc=cms.string("Heavy-ion global observables (pA, pp reco): HF / ECAL / ZDC sums, multiplicities (no centrality bin)"),
+    )
+    process.centralityTableTask = cms.Task(process.centralityTable)
+    _associate(process, process.centralityTableTask)
+    process.zdcTable = zdcTable.clone(src=cms.InputTag("zdcreco"))
+    process.zdcTableTask = cms.Task(process.zdcTable)
+    _associate(process, process.zdcTableTask)
+    # no PPS in the 2016 pPb MiniAOD (no ctppsProtons)
+    _removeNanoModules(process, ["protonTable", "multiRPTable", "singleRPTable"])
+    return process
+
+
 # When the run3_nanoAOD_HIN process modifier is active (cmsDriver --procModifiers
 # run3_nanoAOD_HIN) apply a soft pT threshold to the PF-candidate / lost-track tables:
 # heavy-ion events have very high multiplicity, so this keeps the NanoAOD size under
