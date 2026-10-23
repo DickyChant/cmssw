@@ -112,6 +112,17 @@ autoNANO = {
     # Custom EXO Nano for EXO analyses 
     'EXO': {'sequence': '@PHYS',
             'customize': '@PHYS+PhysicsTools/NanoAOD/custom_exo_cff.add_exonanoTables'},
+    # Heavy-ion (HIN) flavours: PHYS + PF/track + ZDC + HF/centrality tables
+    # HINUPC: ultra-peripheral collisions (HF + ZDC, no centrality bin)
+    'HINUPC': {'sequence': '@PHYS',
+               'customize': '@PHYS+PhysicsTools/NanoAOD/custom_hin_cff.HINUPCCustomNanoAOD'},
+    # HINHAD: hadronic heavy-ion events (full centrality incl. hiBin)
+    'HINHAD': {'sequence': '@PHYS',
+               'customize': '@PHYS+PhysicsTools/NanoAOD/custom_hin_cff.HINHADCustomNanoAOD'},
+    # HINHADSKIM: HINHAD + fully hadronic ttbar multijet skim (>=5 akCs3PF jets
+    # with UParT-regressed pT >= 25 GeV; see custom_hin_cff.addFullHadSkim)
+    'HINHADSKIM': {'sequence': '@PHYS',
+                   'customize': '@PHYS+PhysicsTools/NanoAOD/custom_hin_cff.HINHADCustomNanoAOD+PhysicsTools/NanoAOD/custom_hin_cff.addFullHadSkim'},
     # NANOGEN (from LHE/GEN/AOD)
     'GEN': {'sequence': 'PhysicsTools/NanoAOD/nanogen_cff.nanogenSequence',
             'customize': 'PhysicsTools/NanoAOD/nanogen_cff.customizeNanoGEN'},
