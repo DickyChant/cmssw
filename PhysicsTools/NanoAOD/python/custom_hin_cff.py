@@ -107,6 +107,44 @@ zdcrecoRun3 = cms.EDProducer(
     saturationParameters=cms.PSet(maxADCvalue=cms.int32(255)),
 )
 
+# per-eta rho maps (forest hiFJRhoAnalyzer / hiFJRhoAnalyzerFinerBins), for the
+# event-activity correction of PF isolation as done in PbPb
+hiRhoMapTable = cms.EDProducer(
+    "HIRhoMapTableProducer",
+    etaMap=cms.InputTag("hiFJRhoProducerFinerBins", "mapEtaEdges"),
+    rho=cms.InputTag("hiFJRhoProducerFinerBins", "mapToRho"),
+    rhom=cms.InputTag("hiFJRhoProducerFinerBins", "mapToRhoM"),
+    name=cms.string("HIRho"),
+    doc=cms.string("per-eta rho map, finer bins, recomputed from packedPFCandidates (forest hiFJRhoAnalyzerFinerBins)"),
+    precision=cms.int32(10),
+)
+hiRhoMapAODTable = hiRhoMapTable.clone(
+    etaMap=cms.InputTag("hiFJRhoProducer", "mapEtaEdges"),
+    rho=cms.InputTag("hiFJRhoProducer", "mapToRho"),
+    rhom=cms.InputTag("hiFJRhoProducer", "mapToRhoM"),
+    name=cms.string("HIRhoAOD"),
+    doc=cms.string("per-eta rho map from the AOD hiFJRhoProducer (forest hiFJRhoAnalyzer)"),
+)
+
+
+def addHIRhoMap(process, aodMap=False):
+    """Recompute the finer-binned per-eta rho (kt4 PF jets on packedPFCandidates ->
+    hiFJRhoProducer, as the forest rhoSequence) and store it as the HIRho table.
+    aodMap=True also stores the coarser map from the AOD hiFJRhoProducer (HIRhoAOD)."""
+    from RecoHI.HiJetAlgos.HiRecoPFJets_cff import kt4PFJetsForRho
+    from RecoHI.HiJetAlgos.hiFJRhoProducer import hiFJRhoProducer
+    process.kt4PFJetsForRho = kt4PFJetsForRho.clone(src="packedPFCandidates")
+    process.hiFJRhoProducerFinerBins = hiFJRhoProducer.clone(
+        etaRanges=[-5., -4., -3, -2.5, -2.0, -0.8, 0.8, 2.0, 2.5, 3., 4., 5.])
+    process.hiRhoMapTable = hiRhoMapTable.clone()
+    process.hiRhoMapTableTask = cms.Task(process.kt4PFJetsForRho, process.hiFJRhoProducerFinerBins, process.hiRhoMapTable)
+    _associate(process, process.hiRhoMapTableTask)
+    if aodMap:
+        process.hiRhoMapAODTable = hiRhoMapAODTable.clone()
+        process.hiRhoMapAODTableTask = cms.Task(process.hiRhoMapAODTable)
+        _associate(process, process.hiRhoMapAODTableTask)
+    return process
+
 zdcTable = cms.EDProducer(
     "ZDCTableProducer",
     src=cms.InputTag("zdcrecoRun3"),
@@ -358,7 +396,8 @@ def stripPPonlyContent(process):
 
 def addHIMuons(process):
     """Add an HI-specific extension to the standard NanoAOD Muon table: inner/global-track
-    detail and R03 track isolation (the forest MuonAnalyzer content not in standard nano).
+    detail, R03 track isolation and the raw PF isolation sums (the forest MuonAnalyzer
+    content not in standard nano).
 
     Note: the forest also re-unpacks muons (unpackedMuons, recovering HI muons from
     packed/lost tracks). Routing the standard muon chain through it requires giving
@@ -371,11 +410,20 @@ def addHIMuons(process):
             src=process.muonTable.src,
             cut=cms.string(""),
             name=cms.string("Muon"),
-            doc=cms.string("HI muon extension (unpacked source; inner/global track, R03 iso)"),
+            doc=cms.string("HI muon extension (unpacked source; inner/global track, R03 iso, raw PF iso sums)"),
             singleton=cms.bool(False),
             extension=cms.bool(True),
             variables=cms.PSet(
                 isoTrkR03=Var("isolationR03().sumPt", float, doc="sum track pt in R03 cone", precision=10),
+                # raw PF isolation sums, to redo the event-activity (rho) correction offline
+                pfIsoChR03=Var("pfIsolationR03().sumChargedHadronPt", float, doc="PF charged-hadron sum pt in R03 cone", precision=10),
+                pfIsoNeuR03=Var("pfIsolationR03().sumNeutralHadronEt", float, doc="PF neutral-hadron sum Et in R03 cone", precision=10),
+                pfIsoPhoR03=Var("pfIsolationR03().sumPhotonEt", float, doc="PF photon sum Et in R03 cone", precision=10),
+                pfIsoPUR03=Var("pfIsolationR03().sumPUPt", float, doc="PF pileup charged sum pt in R03 cone", precision=10),
+                pfIsoChR04=Var("pfIsolationR04().sumChargedHadronPt", float, doc="PF charged-hadron sum pt in R04 cone", precision=10),
+                pfIsoNeuR04=Var("pfIsolationR04().sumNeutralHadronEt", float, doc="PF neutral-hadron sum Et in R04 cone", precision=10),
+                pfIsoPhoR04=Var("pfIsolationR04().sumPhotonEt", float, doc="PF photon sum Et in R04 cone", precision=10),
+                pfIsoPUR04=Var("pfIsolationR04().sumPUPt", float, doc="PF pileup charged sum pt in R04 cone", precision=10),
                 innerPt=Var("?innerTrack.isNonnull()?innerTrack().pt():-1", float, doc="inner-track pt", precision=-1),
                 innerPtErr=Var("?innerTrack.isNonnull()?innerTrack().ptError():-1", float, doc="inner-track pt error", precision=10),
                 innerEta=Var("?innerTrack.isNonnull()?innerTrack().eta():-99", float, doc="inner-track eta", precision=12),
@@ -603,7 +651,8 @@ def HINPPBCustomNanoAOD(process):
 
     Same PF/track, muon and e/gamma HIN content as HINHAD, but the pp-reco objects:
     event activity from pACentrality (no centrality bin), the Run-2 ZDC rechits
-    (zdcreco) from the input instead of the Run-3 on-the-fly reconstruction, and UParT
+    (zdcreco) from the input instead of the Run-3 on-the-fly reconstruction, the per-eta
+    rho map (hiFJRhoProducer) for the event-activity correction of isolation, and UParT
     on the standard AK4 CHS jets (enableCHSUParT) instead of the akCs HI jets.
     The pre-10_6 e/gamma objects are updated to the 10_6 format (updateEgammaTo106X)."""
     updateEgammaTo106X(process)
@@ -620,6 +669,8 @@ def HINPPBCustomNanoAOD(process):
     process.zdcTable = zdcTable.clone(src=cms.InputTag("zdcreco"))
     process.zdcTableTask = cms.Task(process.zdcTable)
     _associate(process, process.zdcTableTask)
+    # per-eta rho (finer bins + the AOD map kept in the MiniAOD), for the PbPb-style isolation correction
+    addHIRhoMap(process, aodMap=True)
     # no low-pT electrons in 80X reco (and not needed for pPb): skip the whole chain, the
     # cross-linker gets an always-empty collection, and the LowPtElectron table is dropped
     process.finalLowPtElectrons = cms.EDFilter("PATElectronRefSelector",
