@@ -32,6 +32,11 @@
 <use   name="TrackingTools/GsfTracking"/>
 <use   name="DataFormats/EgammaCandidates"/>
 <use   name="DataFormats/BeamSpot"/>
+<use   name="TrackingTools/PatternTools"/>
+<use   name="TrackingTools/TransientTrack"/>
+<use   name="FWCore/MessageLogger"/>
+<use   name="DataFormats/VertexReco"/>
+<use   name="DataFormats/TrackReco"/>
 <!--flags CXXFLAGS="-g"/-->  
 <library   file="*.cc" name="PhysicsToolsBPHNanoPlugins">
   <flags   EDM_PLUGIN="1"/>

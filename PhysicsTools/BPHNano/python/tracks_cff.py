@@ -12,6 +12,8 @@ tracksBPH = cms.EDProducer(
     electrons       = cms.InputTag("slimmedElectrons"),
     pvSrc           = cms.InputTag("offlineSlimmedPrimaryVertices"),
     maxDzDilep      = cms.double(1.0),
+    requireDilepton = cms.bool(True),     # False: keep tracks also without a dilepton (hadronic HF finders)
+    dedx            = cms.InputTag(""),   # optional dE/dx ValueMap, e.g. dedxEstimator:dedxAllLikelihood
     dcaSig          = cms.double(-100000),
 )
 

@@ -534,6 +534,9 @@ def HINUPCCustomNanoAOD(process):
     addHIPFCands(process)
     addZDCTable(process)
     addCentralityTable(process, addBin=False)  # HF info, no centrality bin (UPC)
+    # HI heavy-flavour finders (Dfinder / HiOnia / Bfinder ports, see hin_heavyflavour_cff)
+    from PhysicsTools.NanoAOD.hin_heavyflavour_cff import addHIHeavyFlavour
+    addHIHeavyFlavour(process)
     tolerateMissingProducts(process)
     return process
 

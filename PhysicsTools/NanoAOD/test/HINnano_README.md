@@ -120,3 +120,31 @@ data (run 400059): ~8e-5 pass rate at >= 5 jets (all events 0-5% central),
 `HINHAD` is a solid hadronic foundation (PF/track + ZDC + full centrality). Natural
 follow-ups for hadronic analyses: event-plane / Q-vector table (`RecoHI/HiEvtPlaneAlgos`)
 and HI constituent-subtracted jet tables.
+
+## HINUPC heavy-flavour finders (Dfinder / HiOnia / Bfinder ports)
+
+`HINUPC` also runs `PhysicsTools/NanoAOD/python/hin_heavyflavour_cff.addHIHeavyFlavour`, a NanoAOD port of the
+HI forest add-on finders built on the BPHNano composite-candidate machinery. No lepton is required for the charm channels,
+and every module has its own label, so it is independent of (and compatible with) `@BPH`.
+
+| Table | Content | Forest counterpart |
+|---|---|---|
+| `HFTrack` | charged tracks (packed PF cands with track details + lost tracks, pt > 0.3, \|eta\| < 2.4): dxy/dz (+sig), dE/dx, full 5x5 helix covariance, hit counts, `keyPacked` -> `PFCand`/`LostTrack` row | Dfinder `TrackInfo` |
+| `D0`, `Dstar`, `Dplus`, `Ds`, `LambdaC` | vertex-fitted D0->K pi, D*->D0(K pi) pi, D+->K pi pi, Ds/D+->phi(KK) pi, Lc->p K pi (+cc, `flavour`=+-1): mass(Err), y, vertex (+cov, prob), `svpvDistance(_2D)`/`svpvDisErr(_2D)`, `alpha(_2D)`, `ip3d`, `maxDoca`, daughters `trkN_idx` -> `HFTrack`; resonance block (`D0_*` for D*, `phi_*` for Ds) incl. `deltaM` | Dfinder `ntDkpi`, `ntDDstar...`, `ntDPhikkpi`, ... (`DInfo`, `tktkRes_*`) |
+| `OniaMuon`, `Onia` | HiOnia-like muons (tracker or global, no pt cut; soft/loose ID, TMOneStationTight, layers, dxy/dz) and dimuons (OS + SS, m < 15 GeV, vertex fit, l_xy, ctau2D) | HiOnia `myTree` (`Reco_mu_*`, `Reco_QQ_*`) |
+| `BToJpsiK`, `BToJpsiTrkTrk` | B+ -> mu mu K+, B -> mu mu h h (K*0, phi) on `Onia` muons + `HFTrack` | Bfinder (B channels 0, 3-5) |
+| `HFGenPart` (MC) | charm/beauty hadrons and quarkonia + (grand)daughters; `*_genPartIdx` of all tables point here | Dfinder/Bfinder `GenInfo` |
+
+Defaults (`preset="loose"`): D daughters pt > 0.5 (D* soft pion: any HFTrack), Dfinder mass windows, vertex prob > 0.01,
+no displacement cut. `addHIHeavyFlavour(process, preset="tight")` applies Dfinder-production-like cuts (vertex prob > 0.05,
+3D decay-length significance > 2.5, daughter pt > 0.7) for higher-multiplicity samples.
+
+Validation (CMSSW_15_1_2, 4 threads):
+* UPC non-prompt D0 -> K pi MC: D0 -> K pi with both daughters pt > 0.5, |eta| < 2.4 reconstructed with 86% efficiency
+  (daughter truth matching; 93% per track), right-sign mass peak sigma ~ 20 MeV; 5.7 ms/event, 2.0 GB, ~4 kB/event in total.
+* UPC prompt J/psi MC: J/psi peak at 3.097 GeV, sigma ~ 42 MeV; `OniaMuon` keeps 1.2 muons/event (70% with pt < 3 GeV)
+  vs 0.67 in the standard `Muon` table. At ~30 tracks/event the loose charm tables cost ~17 kB/event (use `preset="tight"`).
+* The `D*`/`Dplus`/`Ds`/`LambdaC`/B tables are functionally tested only (no dedicated signal MC).
+
+MC truth: candidates are deltaR/pt matched to `HFGenPart` (both K/pi hypotheses may match; `flavour` x gen `pdgId` > 0 selects
+the right one). Exact truth: `trkN_idx` -> `HFTrack_genPartIdx` -> common `HFGenPart` mother.

@@ -22,6 +22,8 @@
 #include "MagneticField/Engine/interface/MagneticField.h"
 #include "MagneticField/Records/interface/IdealMagneticFieldRecord.h"
 #include "TrackingTools/TransientTrack/interface/TransientTrack.h"
+#include "DataFormats/Common/interface/ValueMap.h"
+#include "DataFormats/TrackReco/interface/DeDxData.h"
 #include "helper.h"
 
 class BPHTrackMerger : public edm::global::EDProducer<> {
@@ -32,6 +34,10 @@ public:
         beamSpotSrc_(consumes<reco::BeamSpot>(cfg.getParameter<edm::InputTag>("beamSpot"))),
         tracksToken_(consumes<pat::PackedCandidateCollection>(cfg.getParameter<edm::InputTag>("tracks"))),
         lostTracksToken_(consumes<pat::PackedCandidateCollection>(cfg.getParameter<edm::InputTag>("lostTracks"))),
+        requireDilepton_(cfg.getParameter<bool>("requireDilepton")),
+        dedxTag_(cfg.getParameter<edm::InputTag>("dedx")),
+        dedxToken_(dedxTag_.label().empty() ? edm::EDGetTokenT<edm::ValueMap<reco::DeDxData>>()
+                                            : consumes<edm::ValueMap<reco::DeDxData>>(dedxTag_)),
         dileptonToken_(consumes<pat::CompositeCandidateCollection>(cfg.getParameter<edm::InputTag>("dileptons"))),
         muonToken_(consumes<pat::MuonCollection>(cfg.getParameter<edm::InputTag>("muons"))),
         eleToken_(consumes<pat::ElectronCollection>(cfg.getParameter<edm::InputTag>("electrons"))),
@@ -53,6 +59,12 @@ private:
   const edm::EDGetTokenT<reco::BeamSpot> beamSpotSrc_;
   const edm::EDGetTokenT<pat::PackedCandidateCollection> tracksToken_;
   const edm::EDGetTokenT<pat::PackedCandidateCollection> lostTracksToken_;
+  // requireDilepton = false: keep tracks without any dilepton in the event (hadronic / UPC
+  // heavy-flavour finders); dzTrg is then the dz to the first dilepton if any, else 0.
+  const bool requireDilepton_;
+  // optional dE/dx ValueMap (e.g. dedxEstimator:dedxAllLikelihood in HI/UPC MiniAOD); empty label = off
+  const edm::InputTag dedxTag_;
+  const edm::EDGetTokenT<edm::ValueMap<reco::DeDxData>> dedxToken_;
   const edm::EDGetTokenT<pat::CompositeCandidateCollection> dileptonToken_;
   const edm::EDGetTokenT<pat::MuonCollection> muonToken_;
   const edm::EDGetTokenT<pat::ElectronCollection> eleToken_;
@@ -85,6 +97,12 @@ void BPHTrackMerger::produce(edm::StreamID, edm::Event &evt, edm::EventSetup con
   evt.getByToken(muonToken_, muons);
   edm::Handle<pat::ElectronCollection> pfele;
   evt.getByToken(eleToken_, pfele);
+
+  edm::Handle<edm::ValueMap<reco::DeDxData>> dedxMap;
+  if (!dedxTag_.label().empty())
+    evt.getByToken(dedxToken_, dedxMap);
+  const bool dedxPacked = dedxMap.isValid() && dedxMap->contains(tracks.id());
+  const bool dedxLost = dedxMap.isValid() && dedxMap->contains(lostTracks.id());
 
   // for lost tracks / pf discrimination
   unsigned int nTracks = tracks->size();
@@ -130,8 +148,8 @@ void BPHTrackMerger::produce(edm::StreamID, edm::Event &evt, edm::EventSetup con
       break;  // at least for one dilepton candidate to pass this cuts
     }
 
-    // if track is far from all dilepton candidate
-    if (skipTrack)
+    // if track is far from all dilepton candidate (only when a dilepton is required)
+    if (skipTrack && requireDilepton_)
       continue;
 
     // high purity requirment applied only in packedCands
@@ -217,6 +235,28 @@ void BPHTrackMerger::produce(edm::StreamID, edm::Event &evt, edm::EventSetup con
     pcand.addUserFloat("ptErr", trk.bestTrack()->ptError());
     pcand.addUserFloat("normChi2", trk.bestTrack()->normalizedChi2());
     pcand.addUserInt("nValidPixelHits", trk.numberOfPixelHits());
+    pcand.addUserInt("highPurity", trk.trackHighPurity() ? 1 : 0);
+    // remaining helix-covariance terms (with the 6 above: full 5x5 for re-fitting downstream)
+    pcand.addUserFloat("covQopDxy", trk.bestTrack()->covariance(0, 3));
+    pcand.addUserFloat("covQopDsz", trk.bestTrack()->covariance(0, 4));
+    pcand.addUserFloat("covLamDxy", trk.bestTrack()->covariance(1, 3));
+    pcand.addUserFloat("covLamDsz", trk.bestTrack()->covariance(1, 4));
+    pcand.addUserFloat("covPhiDxy", trk.bestTrack()->covariance(2, 3));
+    pcand.addUserFloat("covPhiDsz", trk.bestTrack()->covariance(2, 4));
+    pcand.addUserFloat("covDxyDxy", trk.bestTrack()->covariance(3, 3));
+    pcand.addUserFloat("covDxyDsz", trk.bestTrack()->covariance(3, 4));
+    pcand.addUserFloat("covDszDsz", trk.bestTrack()->covariance(4, 4));
+    // dE/dx (harmonic-2 / likelihood estimator from the ValueMap), -1 if unavailable
+    float dEdx = -1.f;
+    int dEdxNMeas = -1;
+    if (iTrk < nTracks ? dedxPacked : dedxLost) {
+      const reco::DeDxData &dd = (iTrk < nTracks) ? (*dedxMap)[edm::Ptr<pat::PackedCandidate>(tracks, iTrk)]
+                                                  : (*dedxMap)[edm::Ptr<pat::PackedCandidate>(lostTracks, iTrk - nTracks)];
+      dEdx = dd.dEdx();
+      dEdxNMeas = dd.numberOfMeasurements();
+    }
+    pcand.addUserFloat("dEdx", dEdx);
+    pcand.addUserInt("dEdxNMeas", dEdxNMeas);
 
     // adding the candidate in the composite stuff for fit (need to test)
     if (iTrk < nTracks)
